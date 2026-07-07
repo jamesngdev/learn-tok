@@ -7,7 +7,7 @@ services:
     environment:
       - DATABASE_PATH=/data/dailytok.db
       - TTS_CACHE_DIR=/data/tts-cache
-      - HF_HOME=/data/hf-cache
+      - OMNIVOICE_URL=http://omnivoice:8000
     ports:
       - "${HOST_PORT:-3010}:3000"
     volumes:
@@ -20,12 +20,37 @@ services:
     env_file: .env
     environment:
       - DATABASE_PATH=/data/dailytok.db
-      - TTS_CACHE_DIR=/data/tts-cache
-      - HF_HOME=/data/hf-cache
     volumes:
       - dailytok-data:/data
-    # Seed immediately, then re-crawl every hour. Shares the DB volume with web.
+    # Crawl news + top up knowledge every hour.
     command: sh -c "while true; do npm run crawl; sleep 3600; done"
+
+  # OmniVoice TTS model server (CPU). Loads once at boot (~30s).
+  omnivoice:
+    build: ./omnivoice
+    image: dailytok-omnivoice:latest
+    restart: unless-stopped
+    environment:
+      - HF_HOME=/data/hf-cache
+      - OMNIVOICE_NUM_STEP=16
+    volumes:
+      - dailytok-data:/data
+
+  # Continuously pre-generate TTS audio for all non-ignored cards so driving
+  # mode plays cached (instant). OmniVoice is slow on CPU, so this just keeps
+  # chugging in the background.
+  pregen:
+    build: .
+    image: dailytok:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_PATH=/data/dailytok.db
+      - TTS_CACHE_DIR=/data/tts-cache
+      - OMNIVOICE_URL=http://omnivoice:8000
+    volumes:
+      - dailytok-data:/data
+    command: sh -c "sleep 45; while true; do npm run pregen; sleep 120; done"
 
 volumes:
   dailytok-data:
