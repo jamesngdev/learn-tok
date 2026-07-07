@@ -38,6 +38,9 @@ export function openDb(dbPath?: string): DB {
   const path = dbPath ?? process.env.DATABASE_PATH ?? "./dailytok.db";
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
+  // The web and crawler run as separate processes against the same DB file;
+  // wait rather than fail if the other holds a write lock momentarily.
+  db.pragma("busy_timeout = 5000");
   db.exec(MIGRATION);
   return db;
 }
