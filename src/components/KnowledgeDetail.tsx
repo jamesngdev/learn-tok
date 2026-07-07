@@ -50,6 +50,7 @@ export function KnowledgeDetail({
   const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const suppressMouse = useRef(false);
+  const lastTap = useRef({ t: 0, x: 0, y: 0 });
 
   useEffect(() => {
     if (knowledgeId == null) return;
@@ -122,17 +123,31 @@ export function KnowledgeDetail({
               <div className="diagram" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
             )}
             <p className="tap-hint">
-              Chạm (mobile) / nhấp đúp (desktop) 1 từ để tra · bôi đen 1 cụm để dịch cả cụm
+              Nhấp đúp (double-tap) 1 từ để tra · bôi đen 1 cụm để dịch cả cụm
             </p>
             <div
               className="markdown"
               onTouchEnd={(e) => {
-                // Mobile: single tap -> word; selection -> phrase.
+                // Suppress the synthetic mouse/dblclick events that follow a touch.
                 suppressMouse.current = true;
-                setTimeout(() => (suppressMouse.current = false), 600);
-                if (openSelectionPhrase()) return;
+                setTimeout(() => (suppressMouse.current = false), 700);
+                // A finished selection -> translate the phrase.
+                if (openSelectionPhrase()) {
+                  lastTap.current = { t: 0, x: 0, y: 0 };
+                  return;
+                }
                 const t = e.changedTouches[0];
-                if (t) openWordAt(t.clientX, t.clientY);
+                if (!t) return;
+                // Detect a double-tap on the same spot -> open that word.
+                const now = e.timeStamp;
+                const prev = lastTap.current;
+                const near = Math.abs(t.clientX - prev.x) < 30 && Math.abs(t.clientY - prev.y) < 30;
+                if (now - prev.t < 320 && near) {
+                  lastTap.current = { t: 0, x: 0, y: 0 };
+                  openWordAt(t.clientX, t.clientY);
+                } else {
+                  lastTap.current = { t: now, x: t.clientX, y: t.clientY };
+                }
               }}
               onMouseUp={() => {
                 // Desktop: a deliberate multi-word drag-select -> phrase.
