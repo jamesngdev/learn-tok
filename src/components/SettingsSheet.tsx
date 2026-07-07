@@ -51,16 +51,17 @@ export function SettingsSheet({
       <div className={`scrim${open ? " open" : ""}`} onClick={onClose} />
       <div className={`sheet settings${open ? " open" : ""}`} role="dialog" aria-label="Settings">
         <div className="grab" />
-        <h2 className="settings-h">Chủ đề backend bạn quan tâm</h2>
+        <h2 className="settings-h">Chủ đề bạn quan tâm</h2>
         <p className="settings-sub">
-          Mỗi dòng một chủ đề. DeepSeek sẽ ưu tiên sinh thẻ kiến thức quanh các chủ đề này.
+          Mỗi dòng một chủ đề (bất kỳ lĩnh vực nào). Ở mode Kiến thức, DeepSeek sẽ random một chủ đề
+          trong danh sách này để dạy sâu.
         </p>
         <textarea
           className="settings-ta"
           rows={7}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={"PostgreSQL indexing\nKafka & event streaming\nRedis caching\nJWT & OAuth security\nKubernetes scaling"}
+          placeholder={"Chăm con\nSức khoẻ & dinh dưỡng\nBackend system design\nĐầu tư tài chính cá nhân\nTâm lý học"}
         />
         <div className="sheet-actions">
           <button type="button" className="save" onClick={save} disabled={saving}>

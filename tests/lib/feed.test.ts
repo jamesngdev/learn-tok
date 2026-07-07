@@ -20,62 +20,64 @@ function seedKnowledge(db: ReturnType<typeof openDb>, n: number) {
      VALUES (?,?,?,?,?,?,?,?,?)`
   );
   for (let i = 1; i <= n; i++) {
-    ins.run(`topic${i}`, "Database", `K${i}`, "S", "V", "md", "", "B2", `2026-07-0${i}T00:00:00Z`);
+    ins.run(`topic${i}`, "Health", `K${i}`, "S", "V", "md", "", "B2", `2026-07-0${i}T00:00:00Z`);
   }
 }
 
-describe("getFeed", () => {
-  it("returns newest-first cards with a cursor", () => {
+describe("getFeed news mode", () => {
+  it("returns only news, newest-first, with a cursor", () => {
     const db = openDb(":memory:");
     seed(db, 3);
-    const page = getFeed(db, null, 2);
+    seedKnowledge(db, 2);
+    const page = getFeed(db, "news", null, 2);
+    expect(page.cards.every((c) => c.type === "news")).toBe(true);
     expect(page.cards.map((c) => c.title_en)).toEqual(["T3", "T2"]);
-    expect(page.cards[0].type).toBe("news");
     expect(page.nextCursor).not.toBeNull();
   });
 
-  it("pages through with the cursor and ends with null", () => {
+  it("pages through news and ends with null", () => {
     const db = openDb(":memory:");
     seed(db, 3);
-    const p1 = getFeed(db, null, 2);
-    const p2 = getFeed(db, p1.nextCursor, 2);
+    const p1 = getFeed(db, "news", null, 2);
+    const p2 = getFeed(db, "news", p1.nextCursor, 2);
     expect(p2.cards.map((c) => c.title_en)).toEqual(["T1"]);
     expect(p2.nextCursor).toBeNull();
   });
 
-  it("alternates 1 news : 1 knowledge (news even, knowledge odd)", () => {
-    const db = openDb(":memory:");
-    seed(db, 5);
-    seedKnowledge(db, 5);
-    const page = getFeed(db, null, 10);
-    expect(page.cards.map((c) => c.type)).toEqual([
-      "news", "knowledge", "news", "knowledge", "news",
-      "knowledge", "news", "knowledge", "news", "knowledge",
-    ]);
-    // Knowledge is oldest-first.
-    expect(page.cards[1].title_en).toBe("K1");
-  });
-
-  it("keeps the alternation across pages via the cursor", () => {
-    const db = openDb(":memory:");
-    seed(db, 5);
-    seedKnowledge(db, 5);
-    const p1 = getFeed(db, null, 4); // N K N K
-    expect(p1.cards.map((c) => c.type)).toEqual(["news", "knowledge", "news", "knowledge"]);
-    const p2 = getFeed(db, p1.nextCursor, 4); // continues N K N K
-    expect(p2.cards.map((c) => c.type)).toEqual(["news", "knowledge", "news", "knowledge"]);
-    expect(p2.cards[1].title_en).toBe("K3");
-  });
-
-  it("excludes ignored news and knowledge", () => {
+  it("excludes ignored news", () => {
     const db = openDb(":memory:");
     seed(db, 3);
-    seedKnowledge(db, 1);
-    ignoreCard(db, "news", 3, "t"); // T3
+    ignoreCard(db, "news", 3, "t");
+    const page = getFeed(db, "news", null, 10);
+    expect(page.cards.map((c) => c.title_en)).not.toContain("T3");
+  });
+});
+
+describe("getFeed knowledge mode", () => {
+  it("returns only knowledge, oldest-first", () => {
+    const db = openDb(":memory:");
+    seed(db, 3);
+    seedKnowledge(db, 3);
+    const page = getFeed(db, "knowledge", null, 10);
+    expect(page.cards.every((c) => c.type === "knowledge")).toBe(true);
+    expect(page.cards.map((c) => c.title_en)).toEqual(["K1", "K2", "K3"]);
+  });
+
+  it("paginates knowledge with the cursor", () => {
+    const db = openDb(":memory:");
+    seedKnowledge(db, 3);
+    const p1 = getFeed(db, "knowledge", null, 2);
+    expect(p1.cards.map((c) => c.title_en)).toEqual(["K1", "K2"]);
+    const p2 = getFeed(db, "knowledge", p1.nextCursor, 2);
+    expect(p2.cards.map((c) => c.title_en)).toEqual(["K3"]);
+    expect(p2.nextCursor).toBeNull();
+  });
+
+  it("excludes ignored knowledge", () => {
+    const db = openDb(":memory:");
+    seedKnowledge(db, 2);
     ignoreCard(db, "knowledge", 1, "t");
-    const page = getFeed(db, null, 10);
-    const titles = page.cards.map((c) => c.title_en);
-    expect(titles).not.toContain("T3");
-    expect(titles).not.toContain("K1");
+    const page = getFeed(db, "knowledge", null, 10);
+    expect(page.cards.map((c) => c.title_en)).toEqual(["K2"]);
   });
 });

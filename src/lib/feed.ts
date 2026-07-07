@@ -1,37 +1,11 @@
 import type { DB } from "./db";
 import type { Card, NewsCard, KnowledgeCard } from "./types";
 
+export type FeedMode = "news" | "knowledge";
+
 export interface FeedPage {
   cards: Card[];
   nextCursor: string | null;
-}
-
-// Alternate 1 news : 1 knowledge (news on even slots, knowledge on odd).
-const CYCLE = 2;
-const KNOWLEDGE_SLOT = 1;
-
-interface Cursor {
-  emitted: number;
-  n: string | null; // "published_at|id" of last news
-  k: string | null; // "created_at|id" of last knowledge
-}
-
-function decodeCursor(cursor?: string | null): Cursor {
-  if (!cursor) return { emitted: 0, n: null, k: null };
-  try {
-    const obj = JSON.parse(Buffer.from(cursor, "base64").toString("utf8"));
-    return {
-      emitted: Number(obj.emitted) || 0,
-      n: obj.n ?? null,
-      k: obj.k ?? null,
-    };
-  } catch {
-    return { emitted: 0, n: null, k: null };
-  }
-}
-
-function encodeCursor(c: Cursor): string {
-  return Buffer.from(JSON.stringify(c), "utf8").toString("base64");
 }
 
 function newsToCard(row: any): NewsCard {
@@ -61,9 +35,9 @@ function knowledgeToCard(row: any): KnowledgeCard {
   };
 }
 
-function fetchNews(db: DB, cur: string | null, limit: number): any[] {
-  if (cur) {
-    const [pub, id] = cur.split("|");
+function fetchNews(db: DB, cursor: string | null, limit: number): any[] {
+  if (cursor) {
+    const [pub, id] = cursor.split("|");
     return db
       .prepare(
         `SELECT * FROM articles a
@@ -71,7 +45,7 @@ function fetchNews(db: DB, cur: string | null, limit: number): any[] {
            AND (a.published_at < ? OR (a.published_at = ? AND a.id < ?))
          ORDER BY a.published_at DESC, a.id DESC LIMIT ?`
       )
-      .all(pub, pub, Number(id), limit);
+      .all(pub, pub, Number(id), limit + 1);
   }
   return db
     .prepare(
@@ -79,14 +53,14 @@ function fetchNews(db: DB, cur: string | null, limit: number): any[] {
        WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
        ORDER BY a.published_at DESC, a.id DESC LIMIT ?`
     )
-    .all(limit);
+    .all(limit + 1);
 }
 
-// Knowledge is ordered oldest-first so newly generated cards append to the
-// runway and appear as the user scrolls deeper (rather than at the very top).
-function fetchKnowledge(db: DB, cur: string | null, limit: number): any[] {
-  if (cur) {
-    const [created, id] = cur.split("|");
+// Knowledge is ordered oldest-first so newly generated cards extend the runway
+// as the user scrolls deeper (top-ups append to the end of the stream).
+function fetchKnowledge(db: DB, cursor: string | null, limit: number): any[] {
+  if (cursor) {
+    const [created, id] = cursor.split("|");
     return db
       .prepare(
         `SELECT id, category, title_en, summary_en, summary_vi, cefr, created_at FROM knowledge k
@@ -94,7 +68,7 @@ function fetchKnowledge(db: DB, cur: string | null, limit: number): any[] {
            AND (k.created_at > ? OR (k.created_at = ? AND k.id > ?))
          ORDER BY k.created_at ASC, k.id ASC LIMIT ?`
       )
-      .all(created, created, Number(id), limit);
+      .all(created, created, Number(id), limit + 1);
   }
   return db
     .prepare(
@@ -102,79 +76,31 @@ function fetchKnowledge(db: DB, cur: string | null, limit: number): any[] {
        WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='knowledge' AND i.card_id=k.id)
        ORDER BY k.created_at ASC, k.id ASC LIMIT ?`
     )
-    .all(limit);
+    .all(limit + 1);
 }
 
-function hasMoreNews(db: DB, cur: string | null): boolean {
-  if (!cur) {
-    return !!db
-      .prepare(
-        `SELECT 1 FROM articles a WHERE NOT EXISTS
-         (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id) LIMIT 1`
-      )
-      .get();
-  }
-  const [pub, id] = cur.split("|");
-  return !!db
-    .prepare(
-      `SELECT 1 FROM articles a
-       WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
-         AND (a.published_at < ? OR (a.published_at = ? AND a.id < ?)) LIMIT 1`
-    )
-    .get(pub, pub, Number(id));
-}
+export function getFeed(
+  db: DB,
+  mode: FeedMode = "news",
+  cursor?: string | null,
+  limit = 10
+): FeedPage {
+  const rows =
+    mode === "knowledge"
+      ? fetchKnowledge(db, cursor ?? null, limit)
+      : fetchNews(db, cursor ?? null, limit);
 
-function hasMoreKnowledge(db: DB, cur: string | null): boolean {
-  if (!cur) {
-    return !!db
-      .prepare(
-        `SELECT 1 FROM knowledge k WHERE NOT EXISTS
-         (SELECT 1 FROM ignored i WHERE i.card_type='knowledge' AND i.card_id=k.id) LIMIT 1`
-      )
-      .get();
-  }
-  const [created, id] = cur.split("|");
-  return !!db
-    .prepare(
-      `SELECT 1 FROM knowledge k
-       WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='knowledge' AND i.card_id=k.id)
-         AND (k.created_at > ? OR (k.created_at = ? AND k.id > ?)) LIMIT 1`
-    )
-    .get(created, created, Number(id));
-}
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const cards: Card[] = pageRows.map((r) =>
+    mode === "knowledge" ? knowledgeToCard(r) : newsToCard(r)
+  );
 
-export function getFeed(db: DB, cursor?: string | null, limit = 10): FeedPage {
-  const { emitted, n: newsCur, k: kCur } = decodeCursor(cursor);
-  const news = fetchNews(db, newsCur, limit);
-  const knowledge = fetchKnowledge(db, kCur, limit);
-
-  const cards: Card[] = [];
-  let ni = 0;
-  let ki = 0;
-  let pos = emitted;
-  while (cards.length < limit) {
-    const wantKnowledge = pos % CYCLE === KNOWLEDGE_SLOT;
-    if (wantKnowledge) {
-      if (ki < knowledge.length) cards.push(knowledgeToCard(knowledge[ki++]));
-      else if (ni < news.length) cards.push(newsToCard(news[ni++]));
-      else break;
-    } else {
-      if (ni < news.length) cards.push(newsToCard(news[ni++]));
-      else if (ki < knowledge.length) cards.push(knowledgeToCard(knowledge[ki++]));
-      else break;
-    }
-    pos++;
-  }
-
-  const lastNews = ni > 0 ? news[ni - 1] : null;
-  const lastK = ki > 0 ? knowledge[ki - 1] : null;
-  const newNewsCur = lastNews ? `${lastNews.published_at}|${lastNews.id}` : newsCur;
-  const newKCur = lastK ? `${lastK.created_at}|${lastK.id}` : kCur;
-
-  const more = hasMoreNews(db, newNewsCur) || hasMoreKnowledge(db, newKCur);
-  const nextCursor = more
-    ? encodeCursor({ emitted: emitted + cards.length, n: newNewsCur, k: newKCur })
-    : null;
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? `${mode === "knowledge" ? last.created_at : last.published_at}|${last.id}`
+      : null;
 
   return { cards, nextCursor };
 }

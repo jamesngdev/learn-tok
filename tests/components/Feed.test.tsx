@@ -25,6 +25,8 @@ describe("Feed", () => {
     // The headline is tokenized into per-word buttons, so match a single word.
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Story")).toBeInTheDocument();
-    expect(screen.getByText(/words today/)).toBeInTheDocument();
+    // Mode toggle is present.
+    expect(screen.getByRole("tab", { name: /Tin tức/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Kiến thức/ })).toBeInTheDocument();
   });
 });

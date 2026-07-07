@@ -23,20 +23,28 @@ const valid = {
 };
 
 describe("generateKnowledge", () => {
-  it("passes existing topics to avoid and the user's interests", async () => {
+  it("passes topics to avoid and the chosen focus area", async () => {
     let seenPrompt = "";
-    const k = await generateKnowledge(["Indexing"], ["Kafka streaming"], async (_sys, user) => {
+    const k = await generateKnowledge(["Indexing"], "Chăm con", async (_sys, user) => {
       seenPrompt = user;
       return JSON.stringify(valid);
     });
     expect(k.topic).toBe("Database connection pooling");
-    expect(k.diagram).toContain("flowchart");
     expect(seenPrompt).toContain("Indexing");
-    expect(seenPrompt).toContain("Kafka streaming");
+    expect(seenPrompt).toContain("Chăm con");
+  });
+
+  it("works with no focus area", async () => {
+    let seenPrompt = "";
+    await generateKnowledge([], null, async (_sys, user) => {
+      seenPrompt = user;
+      return JSON.stringify(valid);
+    });
+    expect(seenPrompt).toContain("any genuinely useful");
   });
 
   it("defaults an invalid cefr to B2", async () => {
-    const k = await generateKnowledge([], [], async () =>
+    const k = await generateKnowledge([], null, async () =>
       JSON.stringify({ ...valid, cefr: "ZZ" })
     );
     expect(k.cefr).toBe("B2");

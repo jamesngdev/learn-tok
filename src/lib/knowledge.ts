@@ -4,32 +4,31 @@ import { deepseekComplete, type CompleteFn } from "./deepseek";
 
 const VALID_CEFR: Cefr[] = ["A2", "B1", "B2", "C1"];
 
-const SYSTEM_PROMPT = `You are a staff-level backend engineering mentor teaching an ambitious mid-level backend developer.
-Pick ONE focused, advanced backend topic in the areas of database optimization, system design / scalability,
-security, or advanced backend techniques (concurrency, caching, messaging, observability, etc.).
-Teach it in ENGLISH (the reader is also practicing technical English).
+const SYSTEM_PROMPT = `You are an expert tutor who can teach any subject clearly and deeply — from backend
+engineering to parenting, health, finance, cooking, or anything else. Teach in ENGLISH (the reader is also
+practicing English), but keep it genuinely useful and practical, not superficial.
 
 Respond with ONLY a JSON object with keys:
-"topic" (a short unique title of the concept, e.g. "Database connection pooling"),
-"category" (exactly one of: Database, System, Security, Technique),
+"topic" (a short unique title of the specific thing taught, e.g. "Sleep training for toddlers"),
+"category" (a short label for the subject area, e.g. "Parenting", "Health", "Backend", "Finance"),
 "title_en" (a punchy card headline),
 "summary_en" (2-3 sentence hook explaining why it matters — fits one phone card),
 "summary_vi" (Vietnamese translation of summary_en),
 "detail_md" (an IN-DEPTH Markdown lesson, roughly 500-900 words, with these sections:
-   "## The Problem" (real-world scenario + what breaks and why),
-   "## How It Works" (the underlying mechanism/theory),
-   "## The Solution" (a concrete, production-grade approach with a realistic code snippet in a fenced block),
-   "## Trade-offs & Pitfalls" (what it costs, when NOT to use it, common mistakes),
-   "## Rule of Thumb" (crisp actionable guidance + rough numbers).
-   Be specific and practical — name real tools, configs, and numbers, not generic advice),
-"diagram" (a Mermaid diagram illustrating the concept, e.g. "flowchart LR\\n A-->B", or "" if not helpful),
+   "## Overview" (what this is and the real-world situation where it matters),
+   "## Why It Matters" (the stakes / what goes wrong without it),
+   "## How To / Key Insights" (concrete, actionable steps or the core mechanism; include a code snippet
+      in a fenced block ONLY if the topic is technical),
+   "## Common Pitfalls" (mistakes people make, when NOT to do it),
+   "## Takeaways" (crisp actionable guidance, with specific numbers/examples where relevant).
+   Be specific and practical — real examples, numbers, and names, not generic advice),
+"diagram" (a Mermaid diagram if it genuinely helps, e.g. "flowchart LR\\n A-->B" or a "mindmap", else ""),
 "cefr" (reading difficulty of summary_en: one of A2, B1, B2, C1).`;
 
-function interestClause(interests: string[]): string {
-  if (interests.length === 0) return "";
-  return `\n\nThe reader is especially interested in these areas — strongly prefer topics within or closely related to them:\n- ${interests.join(
-    "\n- "
-  )}`;
+function focusClause(focusArea: string | null): string {
+  return focusArea
+    ? `\n\nToday's lesson MUST be about this subject the reader chose: "${focusArea}". Pick a specific, useful sub-topic within it.`
+    : `\n\nPick any genuinely useful, interesting topic to teach today.`;
 }
 
 function parseKnowledge(raw: string): KnowledgeGenerated {
@@ -59,14 +58,14 @@ function parseKnowledge(raw: string): KnowledgeGenerated {
 
 export async function generateKnowledge(
   existingTopics: string[],
-  interests: string[] = [],
+  focusArea: string | null = null,
   complete: CompleteFn = deepseekComplete
 ): Promise<KnowledgeGenerated> {
   const avoid =
     existingTopics.length > 0
       ? `Do NOT repeat any of these already-covered topics:\n- ${existingTopics.join("\n- ")}`
       : "This is the first topic.";
-  const raw = await complete(SYSTEM_PROMPT, avoid + interestClause(interests));
+  const raw = await complete(SYSTEM_PROMPT, avoid + focusClause(focusArea));
   return parseKnowledge(raw);
 }
 

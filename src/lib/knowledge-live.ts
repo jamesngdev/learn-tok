@@ -9,8 +9,15 @@ import { getInterests } from "./settings";
 /** Generate `count` new knowledge cards using the real DeepSeek service. */
 export function generateKnowledgeNow(db: DB, count: number): Promise<number> {
   return generateKnowledgeBatch(db, count, {
-    // Read the user's interests fresh on each call so new settings take effect.
-    generate: (topics) => generateKnowledge(topics, getInterests(db)),
+    generate: (topics) => {
+      // Read interests fresh each call and pick ONE at random to focus on.
+      const interests = getInterests(db);
+      const focus =
+        interests.length > 0
+          ? interests[Math.floor(Math.random() * interests.length)]
+          : null;
+      return generateKnowledge(topics, focus);
+    },
     now: () => new Date().toISOString(),
   });
 }
