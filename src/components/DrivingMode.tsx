@@ -26,7 +26,6 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const [error, setError] = useState<string | null>(null);
   const [cardTitle, setCardTitle] = useState("");
   const [cardCat, setCardCat] = useState("");
-  const [prevLine, setPrevLine] = useState("");
   const [curWords, setCurWords] = useState<string[]>([]);
   const [activeWord, setActiveWord] = useState(0);
   const [speaking, setSpeaking] = useState(false);
@@ -42,7 +41,6 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   });
 
   const setCurrentSentence = useCallback((sentence: string) => {
-    setPrevLine(sentenceRef.current);
     sentenceRef.current = sentence;
     const words = sentence.split(/\s+/).filter(Boolean);
     setCurWords(words);
@@ -372,22 +370,19 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
 
       {(phase === "playing" || phase === "paused" || phase === "done") && (
         <>
+          {cardTitle && <div className="driving-title">{cardTitle}</div>}
           <div className="driving-stage">
-            <div className="driving-title">{cardTitle}</div>
-            <div className="driving-lines">
-              {prevLine && <p className="past">{prevLine}</p>}
-              {phase === "done" ? (
-                <p className="cur">— Hết —</p>
-              ) : (
-                <p className="cur" key={sentenceRef.current}>
-                  {curWords.map((w, i) => (
-                    <span key={i} className={i === activeWord ? "wcur" : "wdim"}>
-                      {w}{" "}
-                    </span>
-                  ))}
-                </p>
-              )}
-            </div>
+            {phase === "done" ? (
+              <p className="cur">— Hết —</p>
+            ) : (
+              <p className="cur" key={sentenceRef.current}>
+                {curWords.map((w, i) => (
+                  <span key={i} className={i === activeWord ? "wcur" : "wdim"}>
+                    {w}{" "}
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
           {phase !== "done" && (
             <div className="driving-run">
