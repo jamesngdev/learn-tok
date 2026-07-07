@@ -1,26 +1,31 @@
 import type { DB } from "./db";
 import { synthesize, isCached } from "./tts";
+import { translatePhrase } from "./words";
+import { translateToVi } from "./translate";
 import { markdownToSpeech, splitSentences } from "./speech-text";
 
 export interface PregenResult {
-  generated: number;
-  skipped: number;
-  failed: number;
+  audioGenerated: number;
+  audioSkipped: number;
+  audioFailed: number;
+  translated: number;
   total: number;
 }
 
 /**
- * Pre-synthesize TTS audio for the sentences of recent feed cards so driving
- * mode plays with zero wait. Cached sentences are skipped, so re-runs only do
- * new work; `maxNew` bounds how many fresh sentences one run will generate.
+ * Pre-generate everything driving mode needs for ALL non-ignored cards:
+ *  - Vietnamese subtitle translation for each sentence (fast, cached in DB)
+ *  - TTS audio for each sentence (slow on CPU, cached to disk)
+ * Cached items are skipped, so re-runs only do new work. `maxNewAudio` bounds
+ * how many fresh audio clips one pass generates.
  */
 export async function pregenerateAudio(
   db: DB,
-  opts: { newsLimit?: number; knowledgeLimit?: number; maxNew?: number } = {}
+  opts: { limit?: number; maxNewAudio?: number } = {}
 ): Promise<PregenResult> {
-  const { newsLimit = 40, knowledgeLimit = 40, maxNew = 250 } = opts;
+  const { limit = 1000, maxNewAudio = 100000 } = opts;
 
-  const texts: string[] = [];
+  const sentences: string[] = [];
 
   const news = db
     .prepare(
@@ -28,8 +33,8 @@ export async function pregenerateAudio(
        WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
        ORDER BY a.published_at DESC, a.id DESC LIMIT ?`
     )
-    .all(newsLimit) as { title_en: string; summary_en: string }[];
-  for (const n of news) texts.push(...splitSentences(`${n.title_en}. ${n.summary_en}`));
+    .all(limit) as { title_en: string; summary_en: string }[];
+  for (const n of news) sentences.push(...splitSentences(`${n.title_en}. ${n.summary_en}`));
 
   const kn = db
     .prepare(
@@ -37,26 +42,48 @@ export async function pregenerateAudio(
        WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='knowledge' AND i.card_id=k.id)
        ORDER BY k.created_at ASC, k.id ASC LIMIT ?`
     )
-    .all(knowledgeLimit) as { title_en: string; summary_en: string; detail_md: string }[];
+    .all(limit) as { title_en: string; summary_en: string; detail_md: string }[];
   for (const k of kn) {
-    texts.push(
+    sentences.push(
       ...splitSentences(`${k.title_en}. ${k.summary_en}. ${markdownToSpeech(k.detail_md)}`)
     );
   }
 
-  const result: PregenResult = { generated: 0, skipped: 0, failed: 0, total: texts.length };
-  for (const t of texts) {
-    if (result.generated >= maxNew) break;
-    if (isCached(t)) {
-      result.skipped++;
+  // Dedup identical sentences across cards.
+  const uniq = [...new Set(sentences)];
+  const result: PregenResult = {
+    audioGenerated: 0,
+    audioSkipped: 0,
+    audioFailed: 0,
+    translated: 0,
+    total: uniq.length,
+  };
+
+  const deps = { translateToVi, now: () => new Date().toISOString() };
+
+  // Phase 1: Vietnamese subtitles (fast) — warms all subtitles quickly.
+  for (const s of uniq) {
+    try {
+      await translatePhrase(db, s, deps);
+      result.translated++;
+    } catch {
+      /* subtitle best-effort */
+    }
+  }
+
+  // Phase 2: TTS audio (slow on CPU).
+  for (const s of uniq) {
+    if (result.audioGenerated >= maxNewAudio) break;
+    if (isCached(s)) {
+      result.audioSkipped++;
       continue;
     }
     try {
-      await synthesize(t);
-      result.generated++;
+      await synthesize(s);
+      result.audioGenerated++;
     } catch (err) {
-      result.failed++;
-      if (result.failed <= 3) console.error("pregen failed:", err);
+      result.audioFailed++;
+      if (result.audioFailed <= 3) console.error("pregen audio failed:", err);
     }
   }
   return result;
