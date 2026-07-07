@@ -82,16 +82,22 @@ export function KnowledgeDetail({
     };
   }, [knowledgeId]);
 
-  // Tap a word -> that word; select a phrase -> the whole phrase.
-  function lookupAt(x: number | null, y: number | null) {
+  // Translate the current multi-word selection, if any. Returns true if handled.
+  function openSelectionPhrase(): boolean {
     const sel = window.getSelection();
-    const selected = sel && !sel.isCollapsed ? sel.toString().trim() : "";
-    if (selected) {
-      onWord(selected.length > 200 ? selected.slice(0, 200) : selected);
-      return;
+    const s = sel && !sel.isCollapsed ? sel.toString().trim() : "";
+    if (s && /\s/.test(s)) {
+      onWord(s.length > 200 ? s.slice(0, 200) : s);
+      return true;
     }
-    if (x == null || y == null) return;
-    const w = wordAtPoint(x, y);
+    return false;
+  }
+
+  // Open the single word (from a word-selection or the point under the cursor).
+  function openWordAt(x: number | null, y: number | null) {
+    const sel = window.getSelection();
+    const s = sel && !sel.isCollapsed ? sel.toString().trim() : "";
+    const w = s && !/\s/.test(s) ? s : x != null && y != null ? wordAtPoint(x, y) : null;
     if (w) onWord(w);
   }
 
@@ -115,18 +121,28 @@ export function KnowledgeDetail({
             {diagramSvg && (
               <div className="diagram" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
             )}
-            <p className="tap-hint">Chạm 1 từ để tra · bôi đen 1 cụm để dịch cả cụm</p>
+            <p className="tap-hint">
+              Chạm (mobile) / nhấp đúp (desktop) 1 từ để tra · bôi đen 1 cụm để dịch cả cụm
+            </p>
             <div
               className="markdown"
               onTouchEnd={(e) => {
+                // Mobile: single tap -> word; selection -> phrase.
                 suppressMouse.current = true;
-                setTimeout(() => (suppressMouse.current = false), 500);
+                setTimeout(() => (suppressMouse.current = false), 600);
+                if (openSelectionPhrase()) return;
                 const t = e.changedTouches[0];
-                if (t) lookupAt(t.clientX, t.clientY);
+                if (t) openWordAt(t.clientX, t.clientY);
               }}
-              onMouseUp={(e) => {
+              onMouseUp={() => {
+                // Desktop: a deliberate multi-word drag-select -> phrase.
                 if (suppressMouse.current) return;
-                lookupAt(e.clientX, e.clientY);
+                openSelectionPhrase();
+              }}
+              onDoubleClick={(e) => {
+                // Desktop: double-click a word -> translate that word.
+                if (suppressMouse.current) return;
+                openWordAt(e.clientX, e.clientY);
               }}
               dangerouslySetInnerHTML={{ __html: html }}
             />
