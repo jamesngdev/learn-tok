@@ -59,6 +59,34 @@ export function saveMyWord(
   ).run(normalize(rawWord), now, articleId ?? null);
 }
 
+/**
+ * Translate arbitrary text to Vietnamese, cached in the words table so each
+ * unique sentence is only translated once (used for driving-mode subtitles).
+ */
+export async function translatePhrase(
+  db: DB,
+  rawText: string,
+  deps: { translateToVi: (t: string) => Promise<string | null>; now: () => string }
+): Promise<string | null> {
+  const key = normalize(rawText);
+  if (!key) return null;
+  const cached = db.prepare("SELECT meaning_vi FROM words WHERE word = ?").get(key) as
+    | { meaning_vi: string | null }
+    | undefined;
+  if (cached && cached.meaning_vi) return cached.meaning_vi;
+  const vi = await deps.translateToVi(rawText);
+  db.prepare(
+    `INSERT OR IGNORE INTO words (word, ipa, audio_url, pos, meaning_vi, example, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(key, null, null, null, vi, null, deps.now());
+  if (vi) {
+    db.prepare(
+      "UPDATE words SET meaning_vi = ? WHERE word = ? AND (meaning_vi IS NULL OR meaning_vi = '')"
+    ).run(vi, key);
+  }
+  return vi;
+}
+
 export function listMyWords(db: DB): WordEntry[] {
   return db
     .prepare(

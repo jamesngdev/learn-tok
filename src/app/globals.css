@@ -144,10 +144,14 @@ body { background:var(--bg2); color:var(--ink); font-family:var(--sans); }
 .driving-bar span { display:block; height:100%; background:var(--accent); transition:width .2s; }
 .driving-title { color:var(--muted); font-size:13px; text-align:center; padding:8px 18px 0; text-wrap:balance; }
 .driving-stage { flex:1; display:grid; place-items:center; text-align:center; overflow:hidden; padding:12px 8px; }
-.driving-stage p.cur { margin:0; font-family:var(--serif); font-size:clamp(23px, 6.2vw, 34px); line-height:1.45; color:var(--ink); text-wrap:balance; max-width:640px; animation:sfade .42s cubic-bezier(.2,.7,.2,1); }
+.cur-block { max-width:660px; animation:sfade .42s cubic-bezier(.2,.7,.2,1); }
 @keyframes sfade { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
-.driving-stage .wdim { color:var(--ink); opacity:.4; transition:color .2s ease, opacity .2s ease; }
-.driving-stage .wcur { color:var(--accent); opacity:1; font-weight:700; transition:color .2s ease, opacity .2s ease; }
+/* Uniform weight for every word so the active-word highlight (color only)
+   never changes word width -> no layout reflow/jitter. */
+.driving-stage p.cur { margin:0; font-family:var(--serif); font-weight:600; font-size:clamp(23px, 6.2vw, 34px); line-height:1.45; color:var(--ink); text-wrap:balance; }
+.driving-stage .wdim { color:var(--ink); opacity:.38; transition:color .2s ease, opacity .2s ease; }
+.driving-stage .wcur { color:var(--accent); opacity:1; transition:color .2s ease, opacity .2s ease; }
+.cur-vi { margin:14px 0 0; font-family:var(--sans); color:var(--muted); opacity:.72; font-size:clamp(15px, 3.8vw, 19px); line-height:1.5; text-wrap:balance; }
 .driving-run { padding-top:8px; }
 .driving-progress { height:6px; border-radius:6px; background:var(--surface2); overflow:hidden; width:min(420px,90%); margin:0 auto 8px; }
 .driving-progress .pfill { height:100%; background:var(--accent); transition:width .2s linear; }
@@ -162,5 +166,5 @@ body { background:var(--bg2); color:var(--ink); font-family:var(--sans); }
 @media (prefers-reduced-motion: reduce) {
   *, .detail, .driving-lines p { transition:none !important; }
   .driving-progress .pindet { animation:none; width:100%; }
-  .driving, .driving-stage p.cur { animation:none !important; }
+  .driving, .cur-block { animation:none !important; }
 }

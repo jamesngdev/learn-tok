@@ -27,7 +27,9 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const [cardTitle, setCardTitle] = useState("");
   const [cardCat, setCardCat] = useState("");
   const [curWords, setCurWords] = useState<string[]>([]);
+  const [curVi, setCurVi] = useState("");
   const [activeWord, setActiveWord] = useState(0);
+  const viCache = useRef<Map<string, string>>(new Map());
   const [speaking, setSpeaking] = useState(false);
   const [clipPct, setClipPct] = useState(0);
 
@@ -53,6 +55,27 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     }
     wordPrefixRef.current = prefix;
     wordTotalRef.current = acc || 1;
+
+    // Fetch the Vietnamese translation for the subtitle (cached).
+    const hasLetters = /[A-Za-z]/.test(sentence);
+    if (!hasLetters) {
+      setCurVi("");
+      return;
+    }
+    const cached = viCache.current.get(sentence);
+    if (cached !== undefined) {
+      setCurVi(cached);
+      return;
+    }
+    setCurVi("");
+    fetch(`/api/translate?text=${encodeURIComponent(sentence)}`)
+      .then((r) => r.json())
+      .then((d: { vi: string | null }) => {
+        const vi = d.vi ?? "";
+        viCache.current.set(sentence, vi);
+        if (sentenceRef.current === sentence) setCurVi(vi);
+      })
+      .catch(() => {});
   }, []);
 
   // ---- feed queue ----
@@ -375,13 +398,16 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
             {phase === "done" ? (
               <p className="cur">— Hết —</p>
             ) : (
-              <p className="cur" key={sentenceRef.current}>
-                {curWords.map((w, i) => (
-                  <span key={i} className={i === activeWord ? "wcur" : "wdim"}>
-                    {w}{" "}
-                  </span>
-                ))}
-              </p>
+              <div className="cur-block" key={sentenceRef.current}>
+                <p className="cur">
+                  {curWords.map((w, i) => (
+                    <span key={i} className={i === activeWord ? "wcur" : "wdim"}>
+                      {w}{" "}
+                    </span>
+                  ))}
+                </p>
+                {curVi && <p className="cur-vi">{curVi}</p>}
+              </div>
             )}
           </div>
           {phase !== "done" && (

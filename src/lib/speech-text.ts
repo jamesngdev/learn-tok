@@ -22,15 +22,16 @@ export function markdownToSpeech(md: string): string {
   return t.replace(/\s+/g, " ").trim();
 }
 
-/** Split text into speakable sentences (merging very short fragments). */
+/** Split text into full sentences (one sentence per chunk). */
 export function splitSentences(text: string): string[] {
   const parts = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
   const out: string[] = [];
   for (const raw of parts) {
     const s = raw.trim();
     if (!s) continue;
-    // Merge tiny fragments onto the previous sentence for smoother audio.
-    if (out.length > 0 && s.length < 12) out[out.length - 1] += " " + s;
+    // Only attach a letter-less fragment (e.g. stray punctuation) to the prev
+    // sentence — real sentences always stay as their own chunk.
+    if (out.length > 0 && !/[A-Za-z]/.test(s)) out[out.length - 1] += " " + s;
     else out.push(s);
   }
   return out;
