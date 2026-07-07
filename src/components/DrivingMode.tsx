@@ -26,17 +26,35 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const [error, setError] = useState<string | null>(null);
   const [cardTitle, setCardTitle] = useState("");
   const [cardCat, setCardCat] = useState("");
-  const [lines, setLines] = useState<string[]>([]);
+  const [prevLine, setPrevLine] = useState("");
+  const [curWords, setCurWords] = useState<string[]>([]);
+  const [activeWord, setActiveWord] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [clipPct, setClipPct] = useState(0);
+
+  const sentenceRef = useRef("");
+  const wordPrefixRef = useRef<number[]>([]);
+  const wordTotalRef = useRef(1);
 
   const ctrl = useRef<Ctrl>({
     paused: false, skip: false, dir: "next", exit: false,
     audio: null, stopClip: null, pauseClip: null, resumeClip: null,
   });
 
-  const showSentence = useCallback((s: string) => {
-    setLines((prev) => [...prev, s].slice(-4));
+  const setCurrentSentence = useCallback((sentence: string) => {
+    setPrevLine(sentenceRef.current);
+    sentenceRef.current = sentence;
+    const words = sentence.split(/\s+/).filter(Boolean);
+    setCurWords(words);
+    setActiveWord(0);
+    const prefix: number[] = [];
+    let acc = 0;
+    for (const w of words) {
+      prefix.push(acc);
+      acc += w.length + 1; // weight by word length (+1) for rough timing
+    }
+    wordPrefixRef.current = prefix;
+    wordTotalRef.current = acc || 1;
   }, []);
 
   // ---- feed queue ----
@@ -132,7 +150,14 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
         setClipPct(0);
       };
       audio.ontimeupdate = () => {
-        if (audio.duration) setClipPct(Math.round((audio.currentTime / audio.duration) * 100));
+        if (!audio.duration) return;
+        const p = audio.currentTime / audio.duration;
+        setClipPct(Math.round(p * 100));
+        const prefix = wordPrefixRef.current;
+        const total = wordTotalRef.current;
+        let i = 0;
+        while (i + 1 < prefix.length && prefix[i + 1] / total <= p) i++;
+        setActiveWord(i);
       };
       c.stopClip = () => {
         audio.pause();
@@ -155,13 +180,13 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     const c = ctrl.current;
     setCardTitle(card.title_en);
     setCardCat(card.type === "knowledge" ? `🧠 ${card.category}` : `📰 ${card.category}`);
-    setLines(["…"]);
+    setCurrentSentence("…");
     const sentences = await buildSentences(card);
     if (c.exit || c.skip) return;
 
     for (let s = 0; s < sentences.length; s++) {
       if (c.exit || c.skip) break;
-      showSentence(sentences[s]);
+      setCurrentSentence(sentences[s]);
       const urlP = getAudio(sentences[s]);
       if (sentences[s + 1]) getAudio(sentences[s + 1]); // prefetch next
       let url: string;
@@ -289,12 +314,18 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
           <div className="driving-stage">
             <div className="driving-title">{cardTitle}</div>
             <div className="driving-lines">
-              {lines.map((l, i) => (
-                <p key={i} className={i === lines.length - 1 ? "cur" : "past"}>
-                  {l}
+              {prevLine && <p className="past">{prevLine}</p>}
+              {phase === "done" ? (
+                <p className="cur">— Hết —</p>
+              ) : (
+                <p className="cur" key={sentenceRef.current}>
+                  {curWords.map((w, i) => (
+                    <span key={i} className={i === activeWord ? "wcur" : "wdim"}>
+                      {w}{" "}
+                    </span>
+                  ))}
                 </p>
-              ))}
-              {phase === "done" && <p className="cur">— Hết —</p>}
+              )}
             </div>
           </div>
           {phase !== "done" && (
