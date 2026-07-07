@@ -6,7 +6,13 @@ import { renderCard } from "@/components/cardRegistry";
 import { WordSheet } from "@/components/WordSheet";
 import { MyWordsProvider, useMyWords } from "@/components/MyWordsContext";
 
-function AppBar() {
+function AppBar({
+  onRefresh,
+  refreshing,
+}: {
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
   const { savedTodayCount } = useMyWords();
   return (
     <div className="appbar">
@@ -14,10 +20,19 @@ function AppBar() {
         Daily<i>Tok</i>
       </div>
       <div className="stats">
-        <span className="chip">🔥 5</span>
         <a className="chip" href="/my-words">
           <span className="n">{savedTodayCount}</span>&nbsp;words today
         </a>
+        <button
+          type="button"
+          className={`refresh${refreshing ? " spinning" : ""}`}
+          onClick={onRefresh}
+          disabled={refreshing}
+          aria-label="Refresh news"
+          title="Fetch the latest news now"
+        >
+          ↻
+        </button>
       </div>
     </div>
   );
@@ -28,7 +43,37 @@ function FeedInner({ initial }: { initial: FeedPage }) {
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [word, setWord] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setToast(null);
+    try {
+      const res = await fetch("/api/refresh", { method: "POST" });
+      const result = await res.json();
+      // Reload the newest page regardless, so any new stories appear.
+      const page: FeedPage = await fetch("/api/feed").then((r) => r.json());
+      setCards(page.cards);
+      setCursor(page.nextCursor);
+      feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      setToast(
+        res.ok
+          ? result.inserted > 0
+            ? `${result.inserted} new ${result.inserted === 1 ? "story" : "stories"}`
+            : "You're all caught up"
+          : "Refresh failed — try again"
+      );
+    } catch {
+      setToast("Refresh failed — try again");
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [refreshing]);
 
   const loadMore = useCallback(async () => {
     if (loading || !cursor) return;
@@ -56,8 +101,9 @@ function FeedInner({ initial }: { initial: FeedPage }) {
 
   return (
     <>
-      <AppBar />
-      <div className="feed">
+      <AppBar onRefresh={refresh} refreshing={refreshing} />
+      {toast && <div className="toast">{toast}</div>}
+      <div className="feed" ref={feedRef}>
         {cards.length === 0 && (
           <div className="card">
             <div className="en-summary">

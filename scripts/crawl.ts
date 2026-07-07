@@ -1,17 +1,9 @@
 import { openDb } from "../src/lib/db";
-import { runCrawl } from "../src/lib/crawl";
-import { fetchFrontPage } from "../src/lib/rss";
-import { fetchArticleBody } from "../src/lib/article";
-import { summarize } from "../src/lib/deepseek";
+import { crawlNow } from "../src/lib/crawl-live";
 
 async function main() {
   const db = openDb();
-  const result = await runCrawl(db, {
-    fetchFrontPage: () => fetchFrontPage(),
-    fetchArticleBody: (url) => fetchArticleBody(url),
-    summarize: (input) => summarize(input),
-    now: () => new Date().toISOString(),
-  });
+  const result = await crawlNow(db);
   console.log(
     `crawl done: inserted=${result.inserted} skipped=${result.skipped} failed=${result.failed}`
   );
