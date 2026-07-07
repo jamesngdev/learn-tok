@@ -233,7 +233,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
         <div ref={sentinel} className="sentinel" />
       </div>
       <WordSheet word={word} onClose={() => setWord(null)} />
-      <KnowledgeDetail knowledgeId={detailId} onClose={() => setDetailId(null)} />
+      <KnowledgeDetail knowledgeId={detailId} onClose={() => setDetailId(null)} onWord={setWord} />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );

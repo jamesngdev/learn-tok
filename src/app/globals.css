@@ -70,9 +70,10 @@ body { background:var(--bg2); color:var(--ink); font-family:var(--sans); }
 .btn.link { color:var(--muted); margin-left:auto; text-decoration:none; }
 .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .sentinel { height:1px; }
-.scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:.25s; z-index:30; }
+/* Sheets sit above the knowledge detail overlay (z-index 40). */
+.scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:.25s; z-index:50; }
 .scrim.open { opacity:1; pointer-events:auto; }
-.sheet { position:fixed; left:0; right:0; bottom:0; z-index:31; max-width:520px; margin:0 auto; background:var(--surface2); border-radius:26px 26px 0 0; padding:10px 22px calc(26px + env(safe-area-inset-bottom)); transform:translateY(105%); transition:transform .3s cubic-bezier(.3,.9,.3,1); }
+.sheet { position:fixed; left:0; right:0; bottom:0; z-index:51; max-width:520px; margin:0 auto; background:var(--surface2); border-radius:26px 26px 0 0; padding:10px 22px calc(26px + env(safe-area-inset-bottom)); transform:translateY(105%); transition:transform .3s cubic-bezier(.3,.9,.3,1); }
 .sheet.open { transform:translateY(0); }
 .grab { width:38px; height:4px; border-radius:3px; background:var(--line); margin:2px auto 16px; }
 .sheet .top, .myword .top { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
