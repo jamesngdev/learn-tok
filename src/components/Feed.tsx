@@ -6,6 +6,7 @@ import { renderCard } from "@/components/cardRegistry";
 import { WordSheet } from "@/components/WordSheet";
 import { KnowledgeDetail } from "@/components/KnowledgeDetail";
 import { SettingsSheet } from "@/components/SettingsSheet";
+import { DrivingMode } from "@/components/DrivingMode";
 import { MyWordsProvider, useMyWords } from "@/components/MyWordsContext";
 
 function AppBar({
@@ -14,12 +15,14 @@ function AppBar({
   onRefresh,
   refreshing,
   onSettings,
+  onDrive,
 }: {
   mode: FeedMode;
   onMode: (m: FeedMode) => void;
   onRefresh: () => void;
   refreshing: boolean;
   onSettings: () => void;
+  onDrive: () => void;
 }) {
   const { savedTodayCount } = useMyWords();
   return (
@@ -51,6 +54,15 @@ function AppBar({
         <button
           type="button"
           className="iconbtn"
+          onClick={onDrive}
+          aria-label="Driving mode"
+          title="Chế độ lái xe (nghe)"
+        >
+          🚗
+        </button>
+        <button
+          type="button"
+          className="iconbtn"
           onClick={onSettings}
           aria-label="Settings — topics of interest"
           title="Chủ đề quan tâm"
@@ -79,6 +91,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
   const [word, setWord] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [driving, setDriving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -217,6 +230,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
         onRefresh={refresh}
         refreshing={refreshing}
         onSettings={() => setSettingsOpen(true)}
+        onDrive={() => setDriving(true)}
       />
       {toast && <div className="toast">{toast}</div>}
       <div className="feed" ref={feedRef}>
@@ -235,6 +249,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
       <WordSheet word={word} onClose={() => setWord(null)} />
       <KnowledgeDetail knowledgeId={detailId} onClose={() => setDetailId(null)} onWord={setWord} />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {driving && <DrivingMode mode={mode} onClose={() => setDriving(false)} />}
     </>
   );
 }
