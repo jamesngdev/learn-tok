@@ -148,6 +148,7 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
       audio.onplay = () => {
         setSpeaking(true);
         setClipPct(0);
+        setPlaybackState("playing");
       };
       audio.ontimeupdate = () => {
         if (!audio.duration) return;
@@ -180,6 +181,7 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     const c = ctrl.current;
     setCardTitle(card.title_en);
     setCardCat(card.type === "knowledge" ? `🧠 ${card.category}` : `📰 ${card.category}`);
+    updateMediaSession(card);
     setCurrentSentence("…");
     const sentences = await buildSentences(card);
     if (c.exit || c.skip) return;
@@ -236,6 +238,8 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
         setPhase("error");
         return;
       }
+      setupMediaSession();
+      setPlaybackState("playing");
       setPhase("playing");
       run();
     } catch (err) {
@@ -252,16 +256,32 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     };
   }, []);
 
-  function togglePause() {
-    const c = ctrl.current;
-    c.paused = !c.paused;
-    if (c.paused) {
-      c.pauseClip?.();
-      setPhase("paused");
-    } else {
-      c.resumeClip?.();
-      setPhase("playing");
+  function setPlaybackState(s: MediaSessionPlaybackState) {
+    try {
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = s;
+      }
+    } catch {
+      /* noop */
     }
+  }
+  function doPause() {
+    const c = ctrl.current;
+    c.paused = true;
+    c.pauseClip?.();
+    setPhase("paused");
+    setPlaybackState("paused");
+  }
+  function doResume() {
+    const c = ctrl.current;
+    c.paused = false;
+    c.resumeClip?.();
+    setPhase("playing");
+    setPlaybackState("playing");
+  }
+  function togglePause() {
+    if (ctrl.current.paused) doResume();
+    else doPause();
   }
   function skip(dir: "next" | "prev") {
     const c = ctrl.current;
@@ -270,10 +290,51 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     c.paused = false;
     c.stopClip?.();
     setPhase("playing");
+    setPlaybackState("playing");
+  }
+  function setupMediaSession() {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    try {
+      ms.setActionHandler("play", () => doResume());
+      ms.setActionHandler("pause", () => doPause());
+      ms.setActionHandler("nexttrack", () => skip("next"));
+      ms.setActionHandler("previoustrack", () => skip("prev"));
+    } catch {
+      /* some handlers unsupported */
+    }
+  }
+  function updateMediaSession(card: Card) {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (typeof MediaMetadata === "undefined") return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: card.title_en,
+        artist: `DailyTok · ${card.type === "knowledge" ? "🧠 " : "📰 "}${card.category}`,
+        album: "DailyTok",
+        artwork: [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      });
+    } catch {
+      /* noop */
+    }
   }
   function exit() {
     ctrl.current.exit = true;
     ctrl.current.stopClip?.();
+    try {
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+        const ms = navigator.mediaSession;
+        ms.playbackState = "none";
+        for (const a of ["play", "pause", "nexttrack", "previoustrack"] as const) {
+          ms.setActionHandler(a, null);
+        }
+      }
+    } catch {
+      /* noop */
+    }
     onClose();
   }
 
