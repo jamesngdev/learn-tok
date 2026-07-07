@@ -7,14 +7,21 @@ export interface RssItem {
   isoDate: string;
 }
 
-const FRONT_PAGE_URL = "https://vnexpress.net/rss/trang-chu.rss";
+// VnExpress front-page "featured" feed. Note: the older `trang-chu.rss` now
+// 302-redirects to the homepage, and the CDN redirects non-browser user-agents,
+// so a browser-like UA + an XML Accept header are required.
+const FRONT_PAGE_URL = "https://vnexpress.net/rss/tin-noi-bat.rss";
+
+const BROWSER_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+  accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+};
 
 export async function fetchFrontPage(
   fetchImpl: typeof fetch = fetch
 ): Promise<RssItem[]> {
-  const res = await fetchImpl(FRONT_PAGE_URL, {
-    headers: { "user-agent": "DailyTok/0.1" },
-  });
+  const res = await fetchImpl(FRONT_PAGE_URL, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`RSS fetch failed: ${res.status}`);
   const xml = await res.text();
   const parser = new Parser();
