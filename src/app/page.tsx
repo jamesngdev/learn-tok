@@ -1,3 +1,14 @@
+import { getServerDb } from "@/lib/server-db";
+import { getFeed } from "@/lib/feed";
+import { Feed } from "@/components/Feed";
+
+export const dynamic = "force-dynamic";
+
 export default function Home() {
-  return <main>DailyTok</main>;
+  const page = getFeed(getServerDb(), null, 10);
+  return (
+    <main className="phone">
+      <Feed initial={page} />
+    </main>
+  );
 }
