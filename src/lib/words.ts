@@ -8,8 +8,14 @@ export interface WordDeps {
   now: () => string;
 }
 
-function normalize(word: string): string {
-  return word.toLowerCase().replace(/[^a-z]/g, "");
+// Keep letters, digits, spaces, apostrophes and hyphens so multi-word phrases
+// survive (a single tapped word has no spaces and normalizes as before).
+function normalize(term: string): string {
+  return term
+    .toLowerCase()
+    .replace(/[^a-z0-9' -]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function lookupWord(
