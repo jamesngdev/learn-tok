@@ -4,6 +4,7 @@ import type { Card } from "@/lib/types";
 import type { FeedPage } from "@/lib/feed";
 import { renderCard } from "@/components/cardRegistry";
 import { WordSheet } from "@/components/WordSheet";
+import { KnowledgeDetail } from "@/components/KnowledgeDetail";
 import { MyWordsProvider, useMyWords } from "@/components/MyWordsContext";
 
 function AppBar({
@@ -42,11 +43,40 @@ function FeedInner({ initial }: { initial: FeedPage }) {
   const [cards, setCards] = useState<Card[]>(initial.cards);
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [word, setWord] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const topupBusy = useRef(false);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !cursor) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/feed?cursor=${encodeURIComponent(cursor)}`);
+      const page: FeedPage = await res.json();
+      setCards((prev) => [...prev, ...page.cards]);
+      setCursor(page.nextCursor);
+    } finally {
+      setLoading(false);
+    }
+  }, [cursor, loading]);
+
+  // Proactively keep the knowledge pool stocked as the user nears the end.
+  // The endpoint is a no-op when the pool is already full, so this is cheap.
+  const maybeTopup = useCallback(async () => {
+    if (topupBusy.current) return;
+    topupBusy.current = true;
+    try {
+      await fetch("/api/knowledge/topup", { method: "POST" });
+    } catch {
+      /* ignore */
+    } finally {
+      setTimeout(() => (topupBusy.current = false), 15000);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (refreshing) return;
@@ -55,7 +85,6 @@ function FeedInner({ initial }: { initial: FeedPage }) {
     try {
       const res = await fetch("/api/refresh", { method: "POST" });
       const result = await res.json();
-      // Reload the newest page regardless, so any new stories appear.
       const page: FeedPage = await fetch("/api/feed").then((r) => r.json());
       setCards(page.cards);
       setCursor(page.nextCursor);
@@ -75,29 +104,30 @@ function FeedInner({ initial }: { initial: FeedPage }) {
     }
   }, [refreshing]);
 
-  const loadMore = useCallback(async () => {
-    if (loading || !cursor) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/feed?cursor=${encodeURIComponent(cursor)}`);
-      const page: FeedPage = await res.json();
-      setCards((prev) => [...prev, ...page.cards]);
-      setCursor(page.nextCursor);
-    } finally {
-      setLoading(false);
-    }
-  }, [cursor, loading]);
+  const ignore = useCallback((type: "news" | "knowledge", id: number) => {
+    setCards((prev) => prev.filter((c) => !(c.type === type && c.id === id)));
+    fetch("/api/ignore", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type, id }),
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const el = sentinel.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(),
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+          maybeTopup();
+        }
+      },
       { threshold: 0.1 }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [loadMore]);
+  }, [loadMore, maybeTopup]);
 
   return (
     <>
@@ -113,12 +143,13 @@ function FeedInner({ initial }: { initial: FeedPage }) {
         )}
         {cards.map((c) => (
           <div key={`${c.type}-${c.id}`} className="card-slot">
-            {renderCard(c, setWord)}
+            {renderCard(c, { onWord: setWord, onIgnore: ignore, onDetail: setDetailId })}
           </div>
         ))}
         <div ref={sentinel} className="sentinel" />
       </div>
       <WordSheet word={word} onClose={() => setWord(null)} />
+      <KnowledgeDetail knowledgeId={detailId} onClose={() => setDetailId(null)} />
     </>
   );
 }

@@ -23,7 +23,48 @@ export interface NewsCard extends Summary {
   published_at: string;
 }
 
-export type Card = NewsCard;
+export type KnowledgeCategory = "Database" | "System" | "Security" | "Technique";
+
+export interface KnowledgeGenerated {
+  topic: string;
+  category: string;
+  title_en: string;
+  summary_en: string;
+  summary_vi: string;
+  detail_md: string;
+  diagram: string;
+  cefr: Cefr;
+}
+
+export interface Knowledge extends KnowledgeGenerated {
+  id: number;
+  created_at: string;
+}
+
+/** Feed card for knowledge — front fields only; detail is fetched on demand. */
+export interface KnowledgeCard {
+  type: "knowledge";
+  id: number;
+  category: string;
+  title_en: string;
+  summary_en: string;
+  summary_vi: string;
+  cefr: Cefr;
+  created_at: string;
+}
+
+/** Full detail returned by /api/knowledge/[id]. */
+export interface KnowledgeDetail {
+  id: number;
+  category: string;
+  title_en: string;
+  summary_en: string;
+  summary_vi: string;
+  detail_md: string;
+  diagram: string;
+}
+
+export type Card = NewsCard | KnowledgeCard;
 
 export interface WordEntry {
   word: string;

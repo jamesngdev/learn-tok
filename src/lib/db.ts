@@ -32,6 +32,27 @@ CREATE TABLE IF NOT EXISTS my_words (
   saved_at TEXT NOT NULL,
   source_article_id INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS knowledge (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic TEXT UNIQUE NOT NULL,
+  category TEXT NOT NULL,
+  title_en TEXT NOT NULL,
+  summary_en TEXT NOT NULL,
+  summary_vi TEXT NOT NULL,
+  detail_md TEXT NOT NULL,
+  diagram TEXT NOT NULL,
+  cefr TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_order ON knowledge (created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS ignored (
+  card_type TEXT NOT NULL,
+  card_id INTEGER NOT NULL,
+  ignored_at TEXT NOT NULL,
+  PRIMARY KEY (card_type, card_id)
+);
 `;
 
 export function openDb(dbPath?: string): DB {

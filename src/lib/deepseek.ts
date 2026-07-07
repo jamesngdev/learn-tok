@@ -14,7 +14,7 @@ Given a Vietnamese news article, respond with ONLY a JSON object with keys:
 "cefr" (reading difficulty of summary_en: one of A2, B1, B2, C1).
 Keep it concise enough to fit one phone card.`;
 
-const defaultComplete: CompleteFn = async (system, user) => {
+export const deepseekComplete: CompleteFn = async (system, user) => {
   const client = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
     baseURL: "https://api.deepseek.com",
@@ -32,7 +32,7 @@ const defaultComplete: CompleteFn = async (system, user) => {
 
 export async function summarize(
   input: { title: string; body: string },
-  complete: CompleteFn = defaultComplete
+  complete: CompleteFn = deepseekComplete
 ): Promise<Summary> {
   const raw = await complete(
     SYSTEM_PROMPT,

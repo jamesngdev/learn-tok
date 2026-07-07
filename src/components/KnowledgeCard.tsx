@@ -1,30 +1,29 @@
 "use client";
 import { useState } from "react";
-import type { NewsCard as NewsCardType } from "@/lib/types";
+import type { KnowledgeCard as KnowledgeCardType } from "@/lib/types";
 import { TappableText } from "./TappableText";
-import { relativeTime, readTimeSeconds } from "@/utils/format";
 
-export function NewsCard({
+export function KnowledgeCard({
   card,
   onWord,
+  onDetail,
   onIgnore,
 }: {
-  card: NewsCardType;
+  card: KnowledgeCardType;
   onWord: (word: string) => void;
+  onDetail: () => void;
   onIgnore: () => void;
 }) {
   const [showVi, setShowVi] = useState(false);
-  const readS = readTimeSeconds(card.summary_en);
   return (
-    <article className="card" data-cat={card.category.toLowerCase()}>
+    <article className="card knowledge" data-cat={card.category.toLowerCase()}>
       <div className="meta">
-        <span className="tag">{card.category}</span>
-        <span>· {relativeTime(card.published_at)} · {readS}s read</span>
+        <span className="kbadge">🧠 Backend · {card.category}</span>
         <button
           type="button"
           className="ignore"
           onClick={onIgnore}
-          aria-label="Ignore this story"
+          aria-label="Ignore this card"
           title="Ignore — don't show again"
         >
           ✕
@@ -41,16 +40,16 @@ export function NewsCard({
         <p>{card.summary_vi}</p>
       </div>
       <div className="actions">
+        <button type="button" className="btn primary" onClick={onDetail}>
+          Chi tiết & giải pháp →
+        </button>
         <button
           type="button"
           className={`btn ghost${showVi ? " active" : ""}`}
           onClick={() => setShowVi((v) => !v)}
         >
-          🇻🇳 {showVi ? "Ẩn tiếng Việt" : "Tiếng Việt"}
+          🇻🇳
         </button>
-        <a className="btn link" href={card.source_url} target="_blank" rel="noreferrer">
-          Read on VnExpress →
-        </a>
       </div>
     </article>
   );
