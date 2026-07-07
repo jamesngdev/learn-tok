@@ -31,11 +31,14 @@ function enhanceWords(root: HTMLElement) {
     const frag = document.createDocumentFragment();
     for (const t of tokenize(tn.nodeValue ?? "")) {
       if (t.word) {
-        const span = document.createElement("span");
-        span.className = "word";
-        span.dataset.w = t.word;
-        span.textContent = t.text;
-        frag.appendChild(span);
+        // A <button> (like the feed) taps cleanly on touch; a <span> would
+        // trigger text selection / the magnifier instead of a click.
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "word";
+        btn.dataset.w = t.word;
+        btn.textContent = t.text;
+        frag.appendChild(btn);
       } else {
         frag.appendChild(document.createTextNode(t.text));
       }
