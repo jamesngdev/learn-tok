@@ -4,7 +4,7 @@ import { deepseekComplete, type CompleteFn } from "./deepseek";
 
 const VALID_CEFR: Cefr[] = ["A2", "B1", "B2", "C1"];
 
-const SYSTEM_PROMPT = `You are a senior backend engineering mentor teaching a mid-level backend developer.
+const SYSTEM_PROMPT = `You are a staff-level backend engineering mentor teaching an ambitious mid-level backend developer.
 Pick ONE focused, advanced backend topic in the areas of database optimization, system design / scalability,
 security, or advanced backend techniques (concurrency, caching, messaging, observability, etc.).
 Teach it in ENGLISH (the reader is also practicing technical English).
@@ -15,9 +15,22 @@ Respond with ONLY a JSON object with keys:
 "title_en" (a punchy card headline),
 "summary_en" (2-3 sentence hook explaining why it matters — fits one phone card),
 "summary_vi" (Vietnamese translation of summary_en),
-"detail_md" (Markdown: the problem, the optimization approach, and a concrete solution with a short code snippet if useful),
+"detail_md" (an IN-DEPTH Markdown lesson, roughly 500-900 words, with these sections:
+   "## The Problem" (real-world scenario + what breaks and why),
+   "## How It Works" (the underlying mechanism/theory),
+   "## The Solution" (a concrete, production-grade approach with a realistic code snippet in a fenced block),
+   "## Trade-offs & Pitfalls" (what it costs, when NOT to use it, common mistakes),
+   "## Rule of Thumb" (crisp actionable guidance + rough numbers).
+   Be specific and practical — name real tools, configs, and numbers, not generic advice),
 "diagram" (a Mermaid diagram illustrating the concept, e.g. "flowchart LR\\n A-->B", or "" if not helpful),
 "cefr" (reading difficulty of summary_en: one of A2, B1, B2, C1).`;
+
+function interestClause(interests: string[]): string {
+  if (interests.length === 0) return "";
+  return `\n\nThe reader is especially interested in these areas — strongly prefer topics within or closely related to them:\n- ${interests.join(
+    "\n- "
+  )}`;
+}
 
 function parseKnowledge(raw: string): KnowledgeGenerated {
   let obj: any;
@@ -46,13 +59,14 @@ function parseKnowledge(raw: string): KnowledgeGenerated {
 
 export async function generateKnowledge(
   existingTopics: string[],
+  interests: string[] = [],
   complete: CompleteFn = deepseekComplete
 ): Promise<KnowledgeGenerated> {
   const avoid =
     existingTopics.length > 0
       ? `Do NOT repeat any of these already-covered topics:\n- ${existingTopics.join("\n- ")}`
       : "This is the first topic.";
-  const raw = await complete(SYSTEM_PROMPT, avoid);
+  const raw = await complete(SYSTEM_PROMPT, avoid + interestClause(interests));
   return parseKnowledge(raw);
 }
 

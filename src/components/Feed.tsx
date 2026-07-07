@@ -5,14 +5,17 @@ import type { FeedPage } from "@/lib/feed";
 import { renderCard } from "@/components/cardRegistry";
 import { WordSheet } from "@/components/WordSheet";
 import { KnowledgeDetail } from "@/components/KnowledgeDetail";
+import { SettingsSheet } from "@/components/SettingsSheet";
 import { MyWordsProvider, useMyWords } from "@/components/MyWordsContext";
 
 function AppBar({
   onRefresh,
   refreshing,
+  onSettings,
 }: {
   onRefresh: () => void;
   refreshing: boolean;
+  onSettings: () => void;
 }) {
   const { savedTodayCount } = useMyWords();
   return (
@@ -26,7 +29,16 @@ function AppBar({
         </a>
         <button
           type="button"
-          className={`refresh${refreshing ? " spinning" : ""}`}
+          className="iconbtn"
+          onClick={onSettings}
+          aria-label="Settings — topics of interest"
+          title="Chủ đề quan tâm"
+        >
+          ⚙
+        </button>
+        <button
+          type="button"
+          className={`iconbtn${refreshing ? " spinning" : ""}`}
           onClick={onRefresh}
           disabled={refreshing}
           aria-label="Refresh news"
@@ -44,6 +56,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [word, setWord] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -131,7 +144,11 @@ function FeedInner({ initial }: { initial: FeedPage }) {
 
   return (
     <>
-      <AppBar onRefresh={refresh} refreshing={refreshing} />
+      <AppBar
+        onRefresh={refresh}
+        refreshing={refreshing}
+        onSettings={() => setSettingsOpen(true)}
+      />
       {toast && <div className="toast">{toast}</div>}
       <div className="feed" ref={feedRef}>
         {cards.length === 0 && (
@@ -150,6 +167,7 @@ function FeedInner({ initial }: { initial: FeedPage }) {
       </div>
       <WordSheet word={word} onClose={() => setWord(null)} />
       <KnowledgeDetail knowledgeId={detailId} onClose={() => setDetailId(null)} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

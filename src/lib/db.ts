@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS ignored (
   ignored_at TEXT NOT NULL,
   PRIMARY KEY (card_type, card_id)
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 export function openDb(dbPath?: string): DB {

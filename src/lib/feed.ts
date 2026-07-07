@@ -6,9 +6,9 @@ export interface FeedPage {
   nextCursor: string | null;
 }
 
-// One knowledge card every 5th slot (i.e. 1 knowledge per 4 news).
-const CYCLE = 5;
-const KNOWLEDGE_SLOT = 4;
+// Alternate 1 news : 1 knowledge (news on even slots, knowledge on odd).
+const CYCLE = 2;
+const KNOWLEDGE_SLOT = 1;
 
 interface Cursor {
   emitted: number;

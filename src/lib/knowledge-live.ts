@@ -4,11 +4,13 @@ import {
   generateKnowledgeBatch,
   countActiveKnowledge,
 } from "./knowledge";
+import { getInterests } from "./settings";
 
 /** Generate `count` new knowledge cards using the real DeepSeek service. */
 export function generateKnowledgeNow(db: DB, count: number): Promise<number> {
   return generateKnowledgeBatch(db, count, {
-    generate: (topics) => generateKnowledge(topics),
+    // Read the user's interests fresh on each call so new settings take effect.
+    generate: (topics) => generateKnowledge(topics, getInterests(db)),
     now: () => new Date().toISOString(),
   });
 }

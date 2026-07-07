@@ -43,28 +43,28 @@ describe("getFeed", () => {
     expect(p2.nextCursor).toBeNull();
   });
 
-  it("interleaves one knowledge card every 4 news (slot 4 and 9)", () => {
+  it("alternates 1 news : 1 knowledge (news even, knowledge odd)", () => {
     const db = openDb(":memory:");
-    seed(db, 8);
-    seedKnowledge(db, 2);
+    seed(db, 5);
+    seedKnowledge(db, 5);
     const page = getFeed(db, null, 10);
-    expect(page.cards[4].type).toBe("knowledge");
-    expect(page.cards[9].type).toBe("knowledge");
-    expect(page.cards.filter((c) => c.type === "knowledge")).toHaveLength(2);
-    expect(page.cards.filter((c) => c.type === "news")).toHaveLength(8);
+    expect(page.cards.map((c) => c.type)).toEqual([
+      "news", "knowledge", "news", "knowledge", "news",
+      "knowledge", "news", "knowledge", "news", "knowledge",
+    ]);
     // Knowledge is oldest-first.
-    expect(page.cards[4].title_en).toBe("K1");
+    expect(page.cards[1].title_en).toBe("K1");
   });
 
-  it("keeps the interleave pattern across pages via the cursor", () => {
+  it("keeps the alternation across pages via the cursor", () => {
     const db = openDb(":memory:");
-    seed(db, 8);
-    seedKnowledge(db, 2);
-    const p1 = getFeed(db, null, 5); // positions 0..4 -> 4 news + 1 knowledge
-    expect(p1.cards[4].type).toBe("knowledge");
-    const p2 = getFeed(db, p1.nextCursor, 5); // positions 5..9 -> knowledge at 9
-    expect(p2.cards[4].type).toBe("knowledge");
-    expect(p2.cards.filter((c) => c.type === "knowledge")).toHaveLength(1);
+    seed(db, 5);
+    seedKnowledge(db, 5);
+    const p1 = getFeed(db, null, 4); // N K N K
+    expect(p1.cards.map((c) => c.type)).toEqual(["news", "knowledge", "news", "knowledge"]);
+    const p2 = getFeed(db, p1.nextCursor, 4); // continues N K N K
+    expect(p2.cards.map((c) => c.type)).toEqual(["news", "knowledge", "news", "knowledge"]);
+    expect(p2.cards[1].title_en).toBe("K3");
   });
 
   it("excludes ignored news and knowledge", () => {

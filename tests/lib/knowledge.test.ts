@@ -23,19 +23,20 @@ const valid = {
 };
 
 describe("generateKnowledge", () => {
-  it("parses a valid response and passes existing topics to avoid repeats", async () => {
+  it("passes existing topics to avoid and the user's interests", async () => {
     let seenPrompt = "";
-    const k = await generateKnowledge(["Indexing"], async (_sys, user) => {
+    const k = await generateKnowledge(["Indexing"], ["Kafka streaming"], async (_sys, user) => {
       seenPrompt = user;
       return JSON.stringify(valid);
     });
     expect(k.topic).toBe("Database connection pooling");
     expect(k.diagram).toContain("flowchart");
     expect(seenPrompt).toContain("Indexing");
+    expect(seenPrompt).toContain("Kafka streaming");
   });
 
   it("defaults an invalid cefr to B2", async () => {
-    const k = await generateKnowledge([], async () =>
+    const k = await generateKnowledge([], [], async () =>
       JSON.stringify({ ...valid, cefr: "ZZ" })
     );
     expect(k.cefr).toBe("B2");
