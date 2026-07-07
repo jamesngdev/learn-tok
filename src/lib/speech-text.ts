@@ -21,3 +21,17 @@ export function markdownToSpeech(md: string): string {
   t = t.replace(/\s*\.\s*\./g, "."); // collapse double periods
   return t.replace(/\s+/g, " ").trim();
 }
+
+/** Split text into speakable sentences (merging very short fragments). */
+export function splitSentences(text: string): string[] {
+  const parts = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
+  const out: string[] = [];
+  for (const raw of parts) {
+    const s = raw.trim();
+    if (!s) continue;
+    // Merge tiny fragments onto the previous sentence for smoother audio.
+    if (out.length > 0 && s.length < 12) out[out.length - 1] += " " + s;
+    else out.push(s);
+  }
+  return out;
+}

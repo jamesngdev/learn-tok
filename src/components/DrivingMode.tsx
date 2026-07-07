@@ -2,17 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Card, KnowledgeDetail } from "@/lib/types";
 import type { FeedMode, FeedPage } from "@/lib/feed";
-import { markdownToSpeech } from "@/lib/speech-text";
+import { markdownToSpeech, splitSentences } from "@/lib/speech-text";
 
-const MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
-const VOICE = "af_heart";
-
-type Phase = "intro" | "loading" | "playing" | "paused" | "done" | "error";
+type Phase = "intro" | "playing" | "paused" | "done" | "error";
 
 interface Ctrl {
   paused: boolean;
   skip: boolean;
-  dir: string; // "next" | "prev" — loose to avoid literal narrowing across awaits
+  dir: string; // "next" | "prev"
   exit: boolean;
   audio: HTMLAudioElement | null;
   stopClip: (() => void) | null;
@@ -26,20 +23,17 @@ function cardKey(c: Card) {
 
 export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>("intro");
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [cardTitle, setCardTitle] = useState("");
   const [cardCat, setCardCat] = useState("");
-  const [lines, setLines] = useState<string[]>([]); // recent sentences, last = current
-  const [speaking, setSpeaking] = useState(false); // audio actively playing (vs generating)
-  const [clipPct, setClipPct] = useState(0); // current clip playback %
+  const [lines, setLines] = useState<string[]>([]);
+  const [speaking, setSpeaking] = useState(false);
+  const [clipPct, setClipPct] = useState(0);
 
   const ctrl = useRef<Ctrl>({
     paused: false, skip: false, dir: "next", exit: false,
     audio: null, stopClip: null, pauseClip: null, resumeClip: null,
   });
-  const ttsRef = useRef<any>(null);
-  const kokoroRef = useRef<any>(null);
 
   const showSentence = useCallback((s: string) => {
     setLines((prev) => [...prev, s].slice(-4));
@@ -50,9 +44,11 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const cursor = useRef<string | null>(null);
   const played = useRef<Set<string>>(new Set());
   const idx = useRef(0);
+  // ---- audio prefetch cache (sentence text -> object URL promise) ----
+  const audioCache = useRef<Map<string, Promise<string>>>(new Map());
 
   const fetchPage = useCallback(
-    async (cur: string | null): Promise<FeedPage> => {
+    (cur: string | null): Promise<FeedPage> => {
       const q = cur ? `&cursor=${encodeURIComponent(cur)}` : "";
       return fetch(`/api/feed?mode=${mode}${q}`).then((r) => r.json());
     },
@@ -71,13 +67,11 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   }, []);
 
   const getMore = useCallback(async (): Promise<boolean> => {
-    // Next page via cursor.
     if (cursor.current) {
       const page = await fetchPage(cursor.current);
       cursor.current = page.nextCursor;
       if (addNew(page) > 0) return true;
     }
-    // Knowledge: generate more, then pull fresh unseen cards.
     if (mode === "knowledge") {
       try {
         await fetch("/api/knowledge/topup", { method: "POST" });
@@ -91,7 +85,7 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     return false;
   }, [fetchPage, addNew, mode]);
 
-  async function buildCardText(card: Card): Promise<string> {
+  async function buildSentences(card: Card): Promise<string[]> {
     let text = `${card.title_en}. ${card.summary_en}`;
     if (card.type === "knowledge") {
       try {
@@ -101,27 +95,31 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
         /* summary only */
       }
     }
-    return text;
+    return splitSentences(text);
   }
 
-  function playClip(rawAudio: any): Promise<void> {
+  // Fetch (and cache) the audio URL for one sentence from the backend.
+  function getAudio(sentence: string): Promise<string> {
+    const cache = audioCache.current;
+    let p = cache.get(sentence);
+    if (!p) {
+      p = fetch(`/api/tts?text=${encodeURIComponent(sentence)}`)
+        .then((r) => {
+          if (!r.ok) throw new Error("tts fetch failed");
+          return r.blob();
+        })
+        .then((b) => URL.createObjectURL(b));
+      cache.set(sentence, p);
+    }
+    return p;
+  }
+
+  function playUrl(url: string): Promise<void> {
     return new Promise((resolve) => {
       const c = ctrl.current;
-      let url: string;
-      try {
-        url = URL.createObjectURL(rawAudio.toBlob());
-      } catch {
-        resolve();
-        return;
-      }
       const audio = new Audio(url);
       c.audio = audio;
       const done = () => {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          /* noop */
-        }
         c.audio = null;
         c.stopClip = c.pauseClip = c.resumeClip = null;
         setSpeaking(false);
@@ -158,22 +156,23 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     setCardTitle(card.title_en);
     setCardCat(card.type === "knowledge" ? `🧠 ${card.category}` : `📰 ${card.category}`);
     setLines(["…"]);
-    const text = await buildCardText(card);
+    const sentences = await buildSentences(card);
     if (c.exit || c.skip) return;
 
-    const { TextSplitterStream } = kokoroRef.current;
-    const splitter = new TextSplitterStream();
-    const stream = ttsRef.current.stream(splitter, { voice: VOICE });
-    splitter.push(text);
-    splitter.close();
-
-    for await (const chunk of stream) {
+    for (let s = 0; s < sentences.length; s++) {
       if (c.exit || c.skip) break;
-      const sentence = (chunk.text || "").trim();
-      if (sentence) showSentence(sentence);
+      showSentence(sentences[s]);
+      const urlP = getAudio(sentences[s]);
+      if (sentences[s + 1]) getAudio(sentences[s + 1]); // prefetch next
+      let url: string;
+      try {
+        url = await urlP;
+      } catch {
+        continue; // skip sentences that fail to synthesize
+      }
       await waitWhilePaused();
       if (c.exit || c.skip) break;
-      await playClip(chunk.audio);
+      await playUrl(url);
       if (c.exit) break;
     }
   }
@@ -196,49 +195,31 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
       c.dir = "next";
       await playCard(card);
       if (c.exit) break;
-      idx.current = c.dir === "prev" ? Math.max(0, idx.current - 1) : idx.current + 1;
+      const dir: string = ctrl.current.dir;
+      idx.current = dir === "prev" ? Math.max(0, idx.current - 1) : idx.current + 1;
     }
   }
 
   const start = useCallback(async () => {
-    setPhase("loading");
     setError(null);
     try {
-      const mod = await import("kokoro-js");
-      kokoroRef.current = mod;
-      const load = (device: "webgpu" | "wasm") =>
-        mod.KokoroTTS.from_pretrained(MODEL_ID, {
-          dtype: "q8",
-          device,
-          progress_callback: (e: any) => {
-            if (typeof e?.progress === "number") setProgress(Math.round(e.progress));
-          },
-        });
-      let tts;
-      if (typeof navigator !== "undefined" && "gpu" in navigator) {
-        try {
-          tts = await load("webgpu");
-        } catch {
-          tts = await load("wasm");
-        }
-      } else {
-        tts = await load("wasm");
-      }
-      ttsRef.current = tts;
-      // Seed the queue.
       const page = await fetchPage(null);
       cursor.current = page.nextCursor;
       addNew(page);
+      if (cards.current.length === 0) {
+        setError(mode === "knowledge" ? "Chưa có thẻ kiến thức nào." : "Chưa có tin nào.");
+        setPhase("error");
+        return;
+      }
       setPhase("playing");
       run();
     } catch (err) {
       console.error("driving start failed", err);
-      setError("Không tải được giọng đọc. Thử lại hoặc kiểm tra mạng.");
+      setError("Không tải được nội dung. Kiểm tra mạng và thử lại.");
       setPhase("error");
     }
-  }, [fetchPage, addNew]);
+  }, [fetchPage, addNew, mode]);
 
-  // Cleanup on unmount.
   useEffect(() => {
     return () => {
       ctrl.current.exit = true;
@@ -263,12 +244,11 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     c.skip = true;
     c.paused = false;
     c.stopClip?.();
-    if (phase === "paused") setPhase("playing");
+    setPhase("playing");
   }
   function exit() {
-    const c = ctrl.current;
-    c.exit = true;
-    c.stopClip?.();
+    ctrl.current.exit = true;
+    ctrl.current.stopClip?.();
     onClose();
   }
 
@@ -287,21 +267,11 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
           <h2 className="driving-h">Chế độ Lái xe</h2>
           <p className="driving-sub">
             Nghe cả feed {mode === "knowledge" ? "kiến thức" : "tin tức"} như podcast, rảnh tay.
-            Lần đầu cần tải giọng đọc (~80MB), sau đó lưu lại cho lần sau.
+            Giọng đọc sinh sẵn ở máy chủ nên máy bạn chỉ việc phát.
           </p>
           <button type="button" className="driving-start" onClick={start}>
             ▶ Bắt đầu
           </button>
-        </div>
-      )}
-
-      {phase === "loading" && (
-        <div className="driving-center">
-          <div className="driving-hero">🎧</div>
-          <p className="driving-sub">Đang tải giọng đọc… {progress}%</p>
-          <div className="driving-bar">
-            <span style={{ width: `${progress}%` }} />
-          </div>
         </div>
       )}
 
