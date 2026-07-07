@@ -10,7 +10,8 @@ from omnivoice import OmniVoice
 from omnivoice.models.omnivoice import OmniVoiceGenerationConfig
 
 SR = 24000
-VOICE_INSTRUCT = os.environ.get("OMNIVOICE_INSTRUCT", "female, american accent, clear and calm")
+# Only OmniVoice's fixed instruct vocabulary is allowed (comma + space).
+VOICE_INSTRUCT = os.environ.get("OMNIVOICE_INSTRUCT", "female, american accent, young adult")
 NUM_STEP = int(os.environ.get("OMNIVOICE_NUM_STEP", "16"))
 
 app = FastAPI()
