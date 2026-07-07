@@ -21,10 +21,16 @@ export const metadata: Metadata = {
   },
 };
 export const viewport: Viewport = {
-  themeColor: "#0f1319",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0f1319" },
+    { media: "(prefers-color-scheme: light)", color: "#fbf8f1" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Let the app background extend under the iOS status bar / notch so it
+  // reads as one surface (paired with safe-area padding in CSS).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

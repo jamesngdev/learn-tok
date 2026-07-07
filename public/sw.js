@@ -1,4 +1,4 @@
-const SHELL = "dailytok-shell-v2";
+const SHELL = "dailytok-shell-v3";
 const APP_SHELL = ["/", "/my-words"];
 
 self.addEventListener("install", (e) => {
