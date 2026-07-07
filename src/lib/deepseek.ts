@@ -30,8 +30,10 @@ export const deepseekComplete: CompleteFn = async (system, user) => {
   return r.choices[0]?.message?.content ?? "";
 };
 
-const TRANSLATE_SYSTEM = `You are a professional English-to-Vietnamese translator.
-Translate the user's text into natural, fluent Vietnamese (keep it faithful and idiomatic).
+const TRANSLATE_SYSTEM = `You are a professional English-to-Vietnamese translator for a learning app.
+Translate the user's text into natural, fluent Vietnamese (faithful and idiomatic).
+Keep widely-used technical terms, product names, acronyms, and jargon in English
+(e.g. "connection pooling", "cache", "API", "index") instead of translating them literally.
 If the input is a single word or short phrase, give its concise Vietnamese meaning.
 Respond with ONLY a JSON object: {"vi": "<the Vietnamese translation>"}.`;
 
