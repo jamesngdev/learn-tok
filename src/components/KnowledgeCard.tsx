@@ -18,7 +18,7 @@ export function KnowledgeCard({
   return (
     <article className="card knowledge" data-cat={card.category.toLowerCase()}>
       <div className="meta">
-        <span className="kbadge">🧠 Backend · {card.category}</span>
+        <span className="kbadge">🧠 {card.category}</span>
         <button
           type="button"
           className="ignore"
