@@ -31,6 +31,8 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const [cardTitle, setCardTitle] = useState("");
   const [cardCat, setCardCat] = useState("");
   const [lines, setLines] = useState<string[]>([]); // recent sentences, last = current
+  const [speaking, setSpeaking] = useState(false); // audio actively playing (vs generating)
+  const [clipPct, setClipPct] = useState(0); // current clip playback %
 
   const ctrl = useRef<Ctrl>({
     paused: false, skip: false, dir: "next", exit: false,
@@ -122,10 +124,18 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
         }
         c.audio = null;
         c.stopClip = c.pauseClip = c.resumeClip = null;
+        setSpeaking(false);
         resolve();
       };
       audio.onended = done;
       audio.onerror = done;
+      audio.onplay = () => {
+        setSpeaking(true);
+        setClipPct(0);
+      };
+      audio.ontimeupdate = () => {
+        if (audio.duration) setClipPct(Math.round((audio.currentTime / audio.duration) * 100));
+      };
       c.stopClip = () => {
         audio.pause();
         done();
@@ -317,6 +327,24 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
               {phase === "done" && <p className="cur">— Hết —</p>}
             </div>
           </div>
+          {phase !== "done" && (
+            <div className="driving-run">
+              <div className="driving-progress">
+                {speaking || phase === "paused" ? (
+                  <div className="pfill" style={{ width: `${clipPct}%` }} />
+                ) : (
+                  <div className="pindet" />
+                )}
+              </div>
+              <div className="driving-status">
+                {phase === "paused"
+                  ? "⏸ Tạm dừng"
+                  : speaking
+                    ? "🔊 Đang đọc…"
+                    : "🎙️ Đang tạo giọng…"}
+              </div>
+            </div>
+          )}
           <div className="driving-controls">
             <button type="button" onClick={() => skip("prev")} aria-label="Thẻ trước">
               ⏮
