@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WordEntry } from "@/lib/types";
 import { useMyWords } from "./MyWordsContext";
 
@@ -16,9 +16,13 @@ export function WordSheet({
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const { save } = useMyWords();
+  const openedAt = useRef(0);
 
   useEffect(() => {
     if (!word) return;
+    // The tap/click that opened this sheet fires a trailing event on the new
+    // scrim; ignore outside-close for a moment so it doesn't close instantly.
+    openedAt.current = Date.now();
     setEntry(null);
     setSaved(false);
     setLoading(true);
@@ -53,7 +57,13 @@ export function WordSheet({
 
   return (
     <>
-      <div className={`scrim${word ? " open" : ""}`} onClick={onClose} />
+      <div
+        className={`scrim${word ? " open" : ""}`}
+        onClick={() => {
+          if (Date.now() - openedAt.current < 500) return;
+          onClose();
+        }}
+      />
       <div className={`sheet${word ? " open" : ""}`} role="dialog" aria-label="Word details">
         <div className="grab" />
         <div className="top">
