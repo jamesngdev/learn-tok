@@ -1,4 +1,7 @@
-export async function translateToVi(
+import { translateToViDeepSeek } from "./deepseek";
+
+/** MyMemory free translation — used as a fallback when DeepSeek is unavailable. */
+export async function translateMyMemory(
   text: string,
   fetchImpl: typeof fetch = fetch
 ): Promise<string | null> {
@@ -14,4 +17,17 @@ export async function translateToVi(
   } catch {
     return null;
   }
+}
+
+/**
+ * Translate English text to Vietnamese. Prefers DeepSeek (natural, context-aware)
+ * and falls back to MyMemory if DeepSeek is unavailable.
+ */
+export async function translateToVi(
+  text: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+  const ds = await translateToViDeepSeek(text);
+  if (ds) return ds;
+  return translateMyMemory(text, fetchImpl);
 }

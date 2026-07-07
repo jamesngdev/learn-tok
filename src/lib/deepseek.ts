@@ -30,6 +30,26 @@ export const deepseekComplete: CompleteFn = async (system, user) => {
   return r.choices[0]?.message?.content ?? "";
 };
 
+const TRANSLATE_SYSTEM = `You are a professional English-to-Vietnamese translator.
+Translate the user's text into natural, fluent Vietnamese (keep it faithful and idiomatic).
+If the input is a single word or short phrase, give its concise Vietnamese meaning.
+Respond with ONLY a JSON object: {"vi": "<the Vietnamese translation>"}.`;
+
+/** High-quality EN→VI translation via DeepSeek. Returns null on any failure. */
+export async function translateToViDeepSeek(
+  text: string,
+  complete: CompleteFn = deepseekComplete
+): Promise<string | null> {
+  try {
+    const raw = await complete(TRANSLATE_SYSTEM, text);
+    const obj = JSON.parse(raw);
+    const vi = typeof obj.vi === "string" ? obj.vi.trim() : "";
+    return vi || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function summarize(
   input: { title: string; body: string },
   complete: CompleteFn = deepseekComplete
