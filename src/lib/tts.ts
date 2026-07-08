@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const DEFAULT_VOICE = "omnivoice";
+// Bump this when the voice changes so cached audio regenerates in the new voice.
+export const DEFAULT_VOICE = "us-male-v1";
 const CACHE_DIR = process.env.TTS_CACHE_DIR || "/data/tts-cache";
 const OMNIVOICE_URL = process.env.OMNIVOICE_URL || "http://omnivoice:8000";
 

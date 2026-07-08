@@ -11,6 +11,7 @@ interface Ctrl {
   skip: boolean;
   dir: string; // "next" | "prev"
   exit: boolean;
+  repeat: boolean;
   audio: HTMLAudioElement | null;
   stopClip: (() => void) | null;
   pauseClip: (() => void) | null;
@@ -32,13 +33,19 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
   const viCache = useRef<Map<string, string>>(new Map());
   const [speaking, setSpeaking] = useState(false);
   const [clipPct, setClipPct] = useState(0);
+  const [repeat, setRepeat] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordUrl, setRecordUrl] = useState<string | null>(null);
+  const [recError, setRecError] = useState<string | null>(null);
 
   const sentenceRef = useRef("");
   const wordPrefixRef = useRef<number[]>([]);
   const wordTotalRef = useRef(1);
+  const mediaRec = useRef<MediaRecorder | null>(null);
+  const recChunks = useRef<Blob[]>([]);
 
   const ctrl = useRef<Ctrl>({
-    paused: false, skip: false, dir: "next", exit: false,
+    paused: false, skip: false, dir: "next", exit: false, repeat: false,
     audio: null, stopClip: null, pauseClip: null, resumeClip: null,
   });
 
@@ -207,7 +214,8 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
     const sentences = await buildSentences(card);
     if (c.exit || c.skip) return;
 
-    for (let s = 0; s < sentences.length; s++) {
+    let s = 0;
+    while (s < sentences.length) {
       if (c.exit || c.skip) break;
       setCurrentSentence(sentences[s]);
       const urlP = getAudio(sentences[s]);
@@ -216,12 +224,17 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
       try {
         url = await urlP;
       } catch {
+        s++;
         continue; // skip sentences that fail to synthesize
       }
       await waitWhilePaused();
       if (c.exit || c.skip) break;
       await playUrl(url);
       if (c.exit) break;
+      await waitWhilePaused();
+      if (c.exit || c.skip) break;
+      // Repeat mode replays the same sentence instead of advancing.
+      if (!c.repeat) s++;
     }
   }
 
@@ -342,6 +355,69 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
       /* noop */
     }
   }
+  function toggleRepeat() {
+    ctrl.current.repeat = !ctrl.current.repeat;
+    setRepeat(ctrl.current.repeat);
+  }
+
+  async function toggleRecord() {
+    if (recording) {
+      mediaRec.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recChunks.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size) recChunks.current.push(e.data);
+      };
+      mr.onstop = () => {
+        const blob = new Blob(recChunks.current, { type: mr.mimeType || "audio/webm" });
+        setRecordUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+      };
+      mediaRec.current = mr;
+      mr.start();
+      setRecording(true);
+      setRecError(null);
+      doPause(); // pause TTS so it doesn't bleed into the recording
+    } catch {
+      setRecError("Không truy cập được micro. Cần chạy qua HTTPS để ghi âm.");
+    }
+  }
+
+  function playRecording() {
+    if (recordUrl) new Audio(recordUrl).play().catch(() => {});
+  }
+
+  // Keyboard shortcuts (desktop): r repeat, space play/pause, arrows skip.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      const k = e.key.toLowerCase();
+      if (k === "r") {
+        e.preventDefault();
+        toggleRepeat();
+      } else if (k === " ") {
+        e.preventDefault();
+        togglePause();
+      } else if (k === "arrowright") {
+        skip("next");
+      } else if (k === "arrowleft") {
+        skip("prev");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function exit() {
     ctrl.current.exit = true;
     ctrl.current.stopClip?.();
@@ -439,6 +515,34 @@ export function DrivingMode({ mode, onClose }: { mode: FeedMode; onClose: () => 
               ⏭
             </button>
           </div>
+          <div className="driving-controls2">
+            <button
+              type="button"
+              className={`dbtn2${repeat ? " on" : ""}`}
+              onClick={toggleRepeat}
+              title="Lặp lại câu (phím R)"
+            >
+              🔁 Lặp{repeat ? " ✓" : ""}
+            </button>
+            <button
+              type="button"
+              className={`dbtn2${recording ? " rec" : ""}`}
+              onClick={toggleRecord}
+              title="Thu âm giọng của bạn để luyện shadowing"
+            >
+              {recording ? "⏹ Dừng thu" : "🎤 Thu"}
+            </button>
+            <button
+              type="button"
+              className="dbtn2"
+              onClick={playRecording}
+              disabled={!recordUrl}
+              title="Nghe lại giọng bạn vừa thu"
+            >
+              🔈 Nghe lại
+            </button>
+          </div>
+          {recError && <div className="driving-recerr">{recError}</div>}
         </>
       )}
     </div>
