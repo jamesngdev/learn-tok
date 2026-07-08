@@ -5,8 +5,13 @@ import { deepseekComplete, type CompleteFn } from "./deepseek";
 const VALID_CEFR: Cefr[] = ["A2", "B1", "B2", "C1"];
 
 const SYSTEM_PROMPT = `You are an expert tutor who can teach any subject clearly and deeply — from backend
-engineering to parenting, health, finance, cooking, or anything else. Teach in ENGLISH (the reader is also
-practicing English), but keep it genuinely useful and practical, not superficial.
+engineering to parenting, health, finance, cooking, or anything else. Keep it genuinely useful and
+practical, not superficial.
+
+CRITICAL LANGUAGE RULE: Every field EXCEPT "summary_vi" MUST be written 100% in ENGLISH — that means
+"topic", "category", "title_en", "summary_en", and "detail_md" contain ONLY English, with NO Vietnamese
+words at all. The reader's chosen subject may be given in Vietnamese; understand it, but translate it and
+write the entire lesson in English. "summary_vi" is the ONLY field that is Vietnamese.
 
 Respond with ONLY a JSON object with keys:
 "topic" (a short unique title of the specific thing taught, e.g. "Sleep training for toddlers"),
@@ -27,8 +32,8 @@ Respond with ONLY a JSON object with keys:
 
 function focusClause(focusArea: string | null): string {
   return focusArea
-    ? `\n\nToday's lesson MUST be about this subject the reader chose: "${focusArea}". Pick a specific, useful sub-topic within it.`
-    : `\n\nPick any genuinely useful, interesting topic to teach today.`;
+    ? `\n\nThe reader's chosen subject (may be written in Vietnamese): "${focusArea}". Pick a specific, useful sub-topic within it, and write the ENTIRE lesson (topic, title_en, summary_en, detail_md) in English only. Remember: summary_vi is the only Vietnamese field.`
+    : `\n\nPick any genuinely useful, interesting topic to teach today. Write everything in English except summary_vi.`;
 }
 
 function parseKnowledge(raw: string): KnowledgeGenerated {
