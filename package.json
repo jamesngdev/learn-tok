@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "crawl": "tsx --env-file-if-exists=.env scripts/crawl.ts",
-    "pregen": "tsx --env-file-if-exists=.env scripts/pregen.ts"
+    "pregen": "tsx --env-file-if-exists=.env scripts/pregen.ts",
+    "reset-content": "tsx --env-file-if-exists=.env scripts/reset-content.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.0",

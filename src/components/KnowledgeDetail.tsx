@@ -6,7 +6,10 @@ import { TappableText } from "./TappableText";
 
 let diagramSeq = 0;
 
-const WORD_CHAR = /[A-Za-z'-]/;
+// Any letter (Vietnamese included) so a tapped word is captured whole; only
+// pure-English words are then looked up (see ENGLISH_WORD).
+const WORD_CHAR = /[\p{L}'-]/u;
+const ENGLISH_WORD = /^[A-Za-z][A-Za-z'-]*$/;
 
 // Find the whole word under a screen point (for a plain tap).
 function wordAtPoint(x: number, y: number): string | null {
@@ -33,7 +36,7 @@ function wordAtPoint(x: number, y: number): string | null {
   while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
   while (end < text.length && WORD_CHAR.test(text[end])) end++;
   const w = text.slice(start, end).trim();
-  return /[A-Za-z]/.test(w) ? w : null;
+  return ENGLISH_WORD.test(w) ? w : null;
 }
 
 export function KnowledgeDetail({
@@ -99,7 +102,8 @@ export function KnowledgeDetail({
     const sel = window.getSelection();
     const s = sel && !sel.isCollapsed ? sel.toString().trim() : "";
     const w = s && !/\s/.test(s) ? s : x != null && y != null ? wordAtPoint(x, y) : null;
-    if (w) onWord(w);
+    // A single Vietnamese word has nothing to look up — only English terms do.
+    if (w && ENGLISH_WORD.test(w)) onWord(w);
   }
 
   const open = knowledgeId != null;
@@ -118,12 +122,12 @@ export function KnowledgeDetail({
             <h1 className="detail-title">
               <TappableText text={detail.title_en} onWord={onWord} />
             </h1>
-            <p className="detail-lede">{detail.summary_vi}</p>
+            <p className="detail-lede">{detail.summary_en}</p>
             {diagramSvg && (
               <div className="diagram" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
             )}
             <p className="tap-hint">
-              Nhấp đúp (double-tap) 1 từ để tra · bôi đen 1 cụm để dịch cả cụm
+              Nhấp đúp (double-tap) 1 thuật ngữ tiếng Anh để tra · bôi đen 1 cụm để dịch cả cụm
             </p>
             <div
               className="markdown"

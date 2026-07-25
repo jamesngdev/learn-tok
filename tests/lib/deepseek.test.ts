@@ -3,40 +3,29 @@ import { summarize } from "@/lib/deepseek";
 
 const fakeComplete = async () =>
   JSON.stringify({
-    title_en: "Number One News",
-    summary_en: "This is the English summary. It has two sentences.",
-    summary_vi: "Đây là bản tóm tắt tiếng Việt.",
+    title: "Tin số một hôm nay",
+    summary: "Đây là bản tóm tắt tiếng Việt. Nó có hai câu.",
     category: "World",
-    cefr: "B2",
   });
 
 describe("summarize", () => {
   it("parses a valid DeepSeek JSON response", async () => {
     const s = await summarize({ title: "Tin", body: "Nội dung" }, fakeComplete);
-    expect(s.title_en).toBe("Number One News");
-    expect(s.cefr).toBe("B2");
+    expect(s.title_en).toBe("Tin số một hôm nay");
     expect(s.category).toBe("World");
   });
 
-  it("defaults an invalid cefr to B1", async () => {
-    const s = await summarize(
-      { title: "t", body: "b" },
-      async () =>
-        JSON.stringify({
-          title_en: "a",
-          summary_en: "b",
-          summary_vi: "c",
-          category: "Life",
-          cefr: "Z9",
-        })
-    );
+  it("stores the Vietnamese summary in both summary columns", async () => {
+    const s = await summarize({ title: "Tin", body: "Nội dung" }, fakeComplete);
+    expect(s.summary_en).toBe("Đây là bản tóm tắt tiếng Việt. Nó có hai câu.");
+    expect(s.summary_vi).toBe(s.summary_en);
     expect(s.cefr).toBe("B1");
   });
 
   it("throws when a required text field is missing", async () => {
     await expect(
       summarize({ title: "t", body: "b" }, async () =>
-        JSON.stringify({ title_en: "a", summary_en: "b", category: "Life", cefr: "B1" })
+        JSON.stringify({ title: "a", category: "Life" })
       )
     ).rejects.toThrow();
   });

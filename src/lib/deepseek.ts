@@ -3,16 +3,17 @@ import type { Cefr, Summary } from "./types";
 
 export type CompleteFn = (systemPrompt: string, userPrompt: string) => Promise<string>;
 
-const VALID_CEFR: Cefr[] = ["A2", "B1", "B2", "C1"];
+// Cards are Vietnamese now, so CEFR (an English reading level) no longer means
+// anything. The column stays for schema compatibility with a fixed value.
+const DEFAULT_CEFR: Cefr = "B1";
 
-const SYSTEM_PROMPT = `You are an editor for a Vietnamese learner of English.
-Given a Vietnamese news article, respond with ONLY a JSON object with keys:
-"title_en" (an English headline),
-"summary_en" (2-3 sentence English summary),
-"summary_vi" (a Vietnamese summary of the same meaning),
-"category" (one of: World, Business, Science, Life, Sports, Tech, Vietnam),
-"cefr" (reading difficulty of summary_en: one of A2, B1, B2, C1).
-Keep it concise enough to fit one phone card.`;
+const SYSTEM_PROMPT = `Bạn là biên tập viên của một app đọc tin dạng thẻ (mỗi thẻ vừa một màn hình điện thoại).
+Cho một bài báo tiếng Việt, trả về DUY NHẤT một JSON object với các key:
+"title" (tiêu đề ngắn, gãy gọn, TIẾNG VIỆT),
+"summary" (tóm tắt 2-3 câu bằng TIẾNG VIỆT — cụ thể, đủ ý, vừa một thẻ điện thoại),
+"category" (một trong: World, Business, Science, Life, Sports, Tech, Vietnam).
+Viết bằng tiếng Việt tự nhiên. Giữ nguyên tiếng Anh các thuật ngữ kỹ thuật, tên riêng,
+tên sản phẩm và từ viết tắt quen dùng (API, CPU, AI...) thay vì dịch máy móc.`;
 
 export const deepseekComplete: CompleteFn = async (system, user) => {
   const client = new OpenAI({
@@ -20,7 +21,8 @@ export const deepseekComplete: CompleteFn = async (system, user) => {
     baseURL: "https://api.deepseek.com",
   });
   const r = await client.chat.completions.create({
-    model: "deepseek-chat",
+    // `deepseek-chat` was retired; the API now serves deepseek-v4-{pro,flash}.
+    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
@@ -66,17 +68,19 @@ export async function summarize(
   } catch {
     throw new Error("DeepSeek returned non-JSON output");
   }
-  for (const key of ["title_en", "summary_en", "summary_vi", "category"] as const) {
+  for (const key of ["title", "summary", "category"] as const) {
     if (typeof obj[key] !== "string" || obj[key].trim() === "") {
       throw new Error(`DeepSeek response missing field: ${key}`);
     }
   }
-  const cefr: Cefr = VALID_CEFR.includes(obj.cefr) ? obj.cefr : "B1";
+  const summary = obj.summary.trim();
+  // The `*_en` / `summary_vi` names are legacy column names — everything the
+  // model writes is Vietnamese now, so both summary columns hold the same text.
   return {
-    title_en: obj.title_en.trim(),
-    summary_en: obj.summary_en.trim(),
-    summary_vi: obj.summary_vi.trim(),
+    title_en: obj.title.trim(),
+    summary_en: summary,
+    summary_vi: summary,
     category: obj.category.trim(),
-    cefr,
+    cefr: DEFAULT_CEFR,
   };
 }

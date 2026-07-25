@@ -8,7 +8,7 @@ async function main() {
   const r = await pregenerateAudio(db);
   console.log(
     `pregen pass: audio_gen=${r.audioGenerated} audio_skip=${r.audioSkipped} ` +
-      `audio_fail=${r.audioFailed} translated=${r.translated} total=${r.total}`
+      `audio_fail=${r.audioFailed} total=${r.total}`
   );
   db.close();
 }

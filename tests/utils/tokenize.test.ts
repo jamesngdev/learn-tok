@@ -20,4 +20,15 @@ describe("tokenize", () => {
     const toks = tokenize("a — b");
     expect(toks.some((t) => t.text === "—" && t.word === null)).toBe(true);
   });
+
+  it("leaves Vietnamese words untappable but keeps English terms tappable", () => {
+    const toks = tokenize("Dùng connection pooling để tránh quá tải");
+    const byText = (s: string) => toks.find((t) => t.text === s)!;
+    expect(byText("Dùng").word).toBeNull();
+    expect(byText("tránh").word).toBeNull();
+    expect(byText("connection").word).toBe("connection");
+    expect(byText("pooling").word).toBe("pooling");
+    // Note: diacritic-free Vietnamese words ("cho", "cam") are
+    // indistinguishable from English and stay tappable — harmless.
+  });
 });

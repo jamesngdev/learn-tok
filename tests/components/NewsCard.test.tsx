@@ -6,9 +6,9 @@ import type { NewsCard as T } from "@/lib/types";
 const card: T = {
   type: "news",
   id: 1,
-  title_en: "Big News Today",
-  summary_en: "Something happened.",
-  summary_vi: "Có chuyện đã xảy ra.",
+  title_en: "Tin nóng hôm nay",
+  summary_en: "Một chuyện đã xảy ra với cache hôm nay.",
+  summary_vi: "Một chuyện đã xảy ra với cache hôm nay.",
   category: "World",
   cefr: "B1",
   source_url: "https://x/1",
@@ -16,18 +16,17 @@ const card: T = {
 };
 
 describe("NewsCard", () => {
-  it("renders English summary and calls onWord when a word is tapped", () => {
+  it("renders the Vietnamese summary and calls onWord when a word is tapped", () => {
     const onWord = vi.fn();
-    render(<NewsCard card={card} onWord={onWord} />);
-    fireEvent.click(screen.getByText("Something"));
-    expect(onWord).toHaveBeenCalledWith("something");
+    render(<NewsCard card={card} onWord={onWord} onIgnore={() => {}} />);
+    fireEvent.click(screen.getByText("cache"));
+    expect(onWord).toHaveBeenCalledWith("cache");
   });
 
-  it("reveals the Vietnamese summary on toggle", () => {
-    render(<NewsCard card={card} onWord={() => {}} />);
-    const block = screen.getByText("Có chuyện đã xảy ra.").closest(".vi-block")!;
-    expect(block.className).not.toContain("open");
-    fireEvent.click(screen.getByText(/Tiếng Việt/));
-    expect(block.className).toContain("open");
+  it("does not show a Vietnamese toggle any more (cards are Vietnamese)", () => {
+    render(<NewsCard card={card} onWord={() => {}} onIgnore={() => {}} />);
+    expect(screen.queryByText(/Tiếng Việt/)).toBeNull();
+    expect(document.querySelector(".vi-block")).toBeNull();
+    expect(document.querySelector(".cefr")).toBeNull();
   });
 });

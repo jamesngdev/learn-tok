@@ -1,23 +1,18 @@
 import type { DB } from "./db";
 import { synthesize, isCached } from "./tts";
-import { translatePhrase } from "./words";
-import { translateToVi } from "./translate";
 import { markdownToSpeech, splitSentences } from "./speech-text";
 
 export interface PregenResult {
   audioGenerated: number;
   audioSkipped: number;
   audioFailed: number;
-  translated: number;
   total: number;
 }
 
 /**
- * Pre-generate everything driving mode needs for ALL non-ignored cards:
- *  - Vietnamese subtitle translation for each sentence (fast, cached in DB)
- *  - TTS audio for each sentence (slow on CPU, cached to disk)
- * Cached items are skipped, so re-runs only do new work. `maxNewAudio` bounds
- * how many fresh audio clips one pass generates.
+ * Pre-generate the TTS audio driving mode needs for ALL non-ignored cards
+ * (slow on CPU, cached to disk). Cached clips are skipped, so re-runs only do
+ * new work. `maxNewAudio` bounds how many fresh clips one pass generates.
  */
 export async function pregenerateAudio(
   db: DB,
@@ -55,23 +50,10 @@ export async function pregenerateAudio(
     audioGenerated: 0,
     audioSkipped: 0,
     audioFailed: 0,
-    translated: 0,
     total: uniq.length,
   };
 
-  const deps = { translateToVi, now: () => new Date().toISOString() };
-
-  // Phase 1: Vietnamese subtitles (fast) — warms all subtitles quickly.
-  for (const s of uniq) {
-    try {
-      await translatePhrase(db, s, deps);
-      result.translated++;
-    } catch {
-      /* subtitle best-effort */
-    }
-  }
-
-  // Phase 2: TTS audio (slow on CPU).
+  // TTS audio (slow on CPU).
   for (const s of uniq) {
     if (result.audioGenerated >= maxNewAudio) break;
     if (isCached(s)) {

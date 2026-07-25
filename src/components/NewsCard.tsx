@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import type { NewsCard as NewsCardType } from "@/lib/types";
 import { TappableText } from "./TappableText";
 import { relativeTime, readTimeSeconds } from "@/utils/format";
@@ -13,7 +12,6 @@ export function NewsCard({
   onWord: (word: string) => void;
   onIgnore: () => void;
 }) {
-  const [showVi, setShowVi] = useState(false);
   const readS = readTimeSeconds(card.summary_en);
   return (
     <article className="card" data-cat={card.category.toLowerCase()}>
@@ -29,7 +27,6 @@ export function NewsCard({
         >
           ✕
         </button>
-        <span className="cefr">CEFR {card.cefr}</span>
       </div>
       <h1 className="headline">
         <TappableText text={card.title_en} onWord={onWord} />
@@ -37,17 +34,7 @@ export function NewsCard({
       <div className="en-summary">
         <TappableText text={card.summary_en} onWord={onWord} />
       </div>
-      <div className={`vi-block${showVi ? " open" : ""}`}>
-        <p>{card.summary_vi}</p>
-      </div>
       <div className="actions">
-        <button
-          type="button"
-          className={`btn ghost${showVi ? " active" : ""}`}
-          onClick={() => setShowVi((v) => !v)}
-        >
-          🇻🇳 {showVi ? "Ẩn tiếng Việt" : "Tiếng Việt"}
-        </button>
         <a className="btn link" href={card.source_url} target="_blank" rel="noreferrer">
           Read on VnExpress →
         </a>

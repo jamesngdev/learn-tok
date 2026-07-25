@@ -11,15 +11,26 @@ import {
 import { ignoreCard } from "@/lib/ignore";
 import type { KnowledgeGenerated } from "@/lib/types";
 
-const valid = {
-  topic: "Database connection pooling",
+// What the model returns (Vietnamese lesson).
+const raw = {
+  topic: "Connection pooling cho database",
   category: "Database",
-  title_en: "Stop opening a new DB connection per request",
-  summary_en: "Connection pooling reuses a fixed set of DB connections.",
-  summary_vi: "Connection pool tái sử dụng một tập cố định các kết nối DB.",
-  detail_md: "## Problem\nOpening connections is expensive.\n```js\npool.query()\n```",
+  title: "Đừng mở kết nối DB mới cho mỗi request",
+  summary: "Connection pool tái sử dụng một tập cố định các kết nối DB.",
+  detail_md: "## Tổng quan\nMở kết nối rất đắt.\n```js\npool.query()\n```",
   diagram: "flowchart LR\n App-->Pool-->DB",
-  cefr: "B2",
+};
+
+// The same lesson as stored in the DB (legacy column names).
+const valid = {
+  topic: raw.topic,
+  category: raw.category,
+  title_en: raw.title,
+  summary_en: raw.summary,
+  summary_vi: raw.summary,
+  detail_md: raw.detail_md,
+  diagram: raw.diagram,
+  cefr: "B1",
 };
 
 describe("generateKnowledge", () => {
@@ -27,9 +38,9 @@ describe("generateKnowledge", () => {
     let seenPrompt = "";
     const k = await generateKnowledge(["Indexing"], "Chăm con", async (_sys, user) => {
       seenPrompt = user;
-      return JSON.stringify(valid);
+      return JSON.stringify(raw);
     });
-    expect(k.topic).toBe("Database connection pooling");
+    expect(k.topic).toBe(raw.topic);
     expect(seenPrompt).toContain("Indexing");
     expect(seenPrompt).toContain("Chăm con");
   });
@@ -38,16 +49,24 @@ describe("generateKnowledge", () => {
     let seenPrompt = "";
     await generateKnowledge([], null, async (_sys, user) => {
       seenPrompt = user;
-      return JSON.stringify(valid);
+      return JSON.stringify(raw);
     });
-    expect(seenPrompt).toContain("any genuinely useful");
+    expect(seenPrompt).toContain("chủ đề thực sự hữu ích");
   });
 
-  it("defaults an invalid cefr to B2", async () => {
-    const k = await generateKnowledge([], null, async () =>
-      JSON.stringify({ ...valid, cefr: "ZZ" })
-    );
-    expect(k.cefr).toBe("B2");
+  it("maps the Vietnamese summary into both summary columns", async () => {
+    const k = await generateKnowledge([], null, async () => JSON.stringify(raw));
+    expect(k.summary_en).toBe(raw.summary);
+    expect(k.summary_vi).toBe(raw.summary);
+    expect(k.cefr).toBe("B1");
+  });
+
+  it("throws when a required field is missing", async () => {
+    await expect(
+      generateKnowledge([], null, async () =>
+        JSON.stringify({ ...raw, detail_md: "" })
+      )
+    ).rejects.toThrow();
   });
 });
 
@@ -56,9 +75,9 @@ describe("insert + dedup + detail", () => {
     const db = openDb(":memory:");
     expect(insertKnowledge(db, valid as KnowledgeGenerated, "2026-07-07T00:00:00Z")).toBe(true);
     expect(insertKnowledge(db, valid as KnowledgeGenerated, "2026-07-07T01:00:00Z")).toBe(false);
-    expect(listKnowledgeTopics(db)).toEqual(["Database connection pooling"]);
+    expect(listKnowledgeTopics(db)).toEqual([raw.topic]);
     const detail = getKnowledgeDetail(db, 1);
-    expect(detail?.detail_md).toContain("Problem");
+    expect(detail?.detail_md).toContain("Tổng quan");
     expect(detail?.diagram).toContain("flowchart");
   });
 });
