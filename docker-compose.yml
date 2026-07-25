@@ -33,6 +33,9 @@ services:
     environment:
       - HF_HOME=/data/hf-cache
       - OMNIVOICE_NUM_STEP=16
+      # Read the cards in Vietnamese with a male young-adult voice.
+      - OMNIVOICE_LANG=vi
+      - OMNIVOICE_INSTRUCT=male, young adult
     volumes:
       - dailytok-data:/data
 

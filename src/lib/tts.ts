@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Bump this when the voice changes so cached audio regenerates in the new voice.
-export const DEFAULT_VOICE = "us-male-v1";
+// vi-male-v1: Vietnamese (language="vi"), male young-adult, no accent tag.
+export const DEFAULT_VOICE = "vi-male-v1";
 const CACHE_DIR = process.env.TTS_CACHE_DIR || "/data/tts-cache";
 const OMNIVOICE_URL = process.env.OMNIVOICE_URL || "http://omnivoice:8000";
 

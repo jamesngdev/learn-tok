@@ -11,7 +11,11 @@ from omnivoice.models.omnivoice import OmniVoiceGenerationConfig
 
 SR = 24000
 # Only OmniVoice's fixed instruct vocabulary is allowed (comma + space).
-VOICE_INSTRUCT = os.environ.get("OMNIVOICE_INSTRUCT", "male, american accent, young adult")
+# The cards are Vietnamese, so no English accent tag here — an accent tag makes
+# the model read Vietnamese with that accent.
+VOICE_INSTRUCT = os.environ.get("OMNIVOICE_INSTRUCT", "male, young adult")
+# ISO code / language name resolved by OmniVoice (646 languages); "vi" = Vietnamese.
+LANGUAGE = os.environ.get("OMNIVOICE_LANG", "vi")
 NUM_STEP = int(os.environ.get("OMNIVOICE_NUM_STEP", "16"))
 
 app = FastAPI()
@@ -34,6 +38,7 @@ def _warmup():
 class Req(BaseModel):
     text: str
     instruct: str | None = None
+    language: str | None = None
 
 
 def to_wav_bytes(audio: np.ndarray) -> bytes:
@@ -59,6 +64,7 @@ def tts(req: Req):
     cfg = OmniVoiceGenerationConfig(num_step=NUM_STEP)
     out = model.generate(
         text=req.text,
+        language=req.language or LANGUAGE,
         instruct=req.instruct or VOICE_INSTRUCT,
         generation_config=cfg,
     )
