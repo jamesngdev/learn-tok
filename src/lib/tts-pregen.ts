@@ -2,6 +2,9 @@ import type { DB } from "./db";
 import { synthesize, isCached } from "./tts";
 import { markdownToSpeech, splitSentences } from "./speech-text";
 
+/** Gap between two freshly generated clips (the TTS service is remote). */
+const PACE_MS = Number(process.env.TTS_PACE_MS ?? 200);
+
 export interface PregenResult {
   audioGenerated: number;
   audioSkipped: number;
@@ -53,7 +56,8 @@ export async function pregenerateAudio(
     total: uniq.length,
   };
 
-  // TTS audio (slow on CPU).
+  // TTS audio. Cached sentences cost nothing; new ones are paced a little so a
+  // full warm-up doesn't hammer the TTS service with hundreds of requests.
   for (const s of uniq) {
     if (result.audioGenerated >= maxNewAudio) break;
     if (isCached(s)) {
@@ -63,6 +67,7 @@ export async function pregenerateAudio(
     try {
       await synthesize(s);
       result.audioGenerated++;
+      await new Promise((r) => setTimeout(r, PACE_MS));
     } catch (err) {
       result.audioFailed++;
       if (result.audioFailed <= 3) console.error("pregen audio failed:", err);

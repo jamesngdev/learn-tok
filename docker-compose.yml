@@ -7,7 +7,7 @@ services:
     environment:
       - DATABASE_PATH=/data/dailytok.db
       - TTS_CACHE_DIR=/data/tts-cache
-      - OMNIVOICE_URL=http://omnivoice:8000
+      - TTS_URL=http://edgetts:8000
     ports:
       - "${HOST_PORT:-3010}:3000"
     volumes:
@@ -25,11 +25,27 @@ services:
     # Crawl news + top up knowledge every hour.
     command: sh -c "while true; do npm run crawl; sleep 3600; done"
 
-  # OmniVoice TTS model server (CPU). Loads once at boot (~30s).
+  # Default TTS: Microsoft Edge neural voices over the network. Tiny image, no
+  # model, no GPU — a sentence takes ~1s instead of ~25s of CPU.
+  edgetts:
+    build: ./edgetts
+    image: dailytok-edgetts:latest
+    restart: unless-stopped
+    environment:
+      # vi-VN-NamMinhNeural (nam) | vi-VN-HoaiMyNeural (nữ)
+      - EDGE_TTS_VOICE=vi-VN-NamMinhNeural
+      - EDGE_TTS_RATE=+0%
+      - EDGE_TTS_PITCH=+0Hz
+
+  # Local OmniVoice model server — the only engine that can clone a reference
+  # voice, but it needs GBs of RAM and ~25s of CPU per sentence. Opt in with:
+  #   docker compose --profile omnivoice up -d omnivoice
+  #   (and set TTS_URL=http://omnivoice:8000 + TTS_FORMAT=wav on web/pregen)
   omnivoice:
     build: ./omnivoice
     image: dailytok-omnivoice:latest
     restart: unless-stopped
+    profiles: ["omnivoice"]
     environment:
       - HF_HOME=/data/hf-cache
       - OMNIVOICE_NUM_STEP=16
@@ -37,14 +53,14 @@ services:
       # OMNIVOICE_REF_TEXT if Whisper's auto-transcript of the clip is wrong.
       - OMNIVOICE_LANG=vi
       - OMNIVOICE_REF_AUDIO_URL=https://raw.githubusercontent.com/jamesngdev/public/refs/heads/main/spiderum-voices/spiderum_voice.wav
+      - OMNIVOICE_REF_MAX_SEC=6
       # Fallback voice if the reference clip can't be fetched.
       - OMNIVOICE_INSTRUCT=male, young adult
     volumes:
       - dailytok-data:/data
 
-  # Continuously pre-generate TTS audio for all non-ignored cards so driving
-  # mode plays cached (instant). OmniVoice is slow on CPU, so this just keeps
-  # chugging in the background.
+  # Pre-generate audio for every non-ignored card so the in-card player and
+  # driving mode start instantly (and keep working if the TTS service is down).
   pregen:
     build: .
     image: dailytok:latest
@@ -53,10 +69,10 @@ services:
     environment:
       - DATABASE_PATH=/data/dailytok.db
       - TTS_CACHE_DIR=/data/tts-cache
-      - OMNIVOICE_URL=http://omnivoice:8000
+      - TTS_URL=http://edgetts:8000
     volumes:
       - dailytok-data:/data
-    command: sh -c "sleep 45; while true; do npm run pregen; sleep 120; done"
+    command: sh -c "sleep 20; while true; do npm run pregen; sleep 120; done"
 
 volumes:
   dailytok-data:

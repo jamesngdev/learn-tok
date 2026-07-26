@@ -1,4 +1,4 @@
-import { synthesize, DEFAULT_VOICE } from "@/lib/tts";
+import { synthesize, DEFAULT_VOICE, AUDIO_MIME } from "@/lib/tts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     const wav = await synthesize(text.slice(0, 800), voice);
     return new Response(new Uint8Array(wav), {
       headers: {
-        "content-type": "audio/wav",
+        "content-type": AUDIO_MIME,
         "cache-control": "public, max-age=31536000, immutable",
       },
     });
