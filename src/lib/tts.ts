@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Bump this when the voice changes so cached audio regenerates in the new voice.
-// vi-edge-nam-v1: Vietnamese, Microsoft Edge neural voice vi-VN-NamMinhNeural.
-export const DEFAULT_VOICE = process.env.TTS_VOICE_KEY || "vi-edge-nam-v1";
+// vi-edge-nam-v2: Vietnamese, Microsoft Edge voice vi-VN-NamMinhNeural, with
+// the padding silence trimmed off each clip (v1 clips had ~1.1s gaps).
+export const DEFAULT_VOICE = process.env.TTS_VOICE_KEY || "vi-edge-nam-v2";
 const CACHE_DIR = process.env.TTS_CACHE_DIR || "/data/tts-cache";
 // Any service speaking the same POST /tts contract: edge-tts (default, remote
 // voices, no local compute) or the heavyweight OmniVoice container.

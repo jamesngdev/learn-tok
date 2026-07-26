@@ -36,6 +36,9 @@ services:
       - EDGE_TTS_VOICE=vi-VN-NamMinhNeural
       - EDGE_TTS_RATE=+0%
       - EDGE_TTS_PITCH=+0Hz
+      # Silence kept at each end of a clip -> ~0.5s pause between sentences.
+      - EDGE_TTS_LEAD_MS=100
+      - EDGE_TTS_TAIL_MS=400
 
   # Local OmniVoice model server — the only engine that can clone a reference
   # voice, but it needs GBs of RAM and ~25s of CPU per sentence. Opt in with:
