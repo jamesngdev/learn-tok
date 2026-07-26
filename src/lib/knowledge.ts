@@ -20,14 +20,25 @@ Trả về DUY NHẤT một JSON object với các key:
 "category" (nhãn ngắn của lĩnh vực, ví dụ "Nuôi con", "Sức khoẻ", "Backend", "Tài chính"),
 "title" (tiêu đề thẻ ngắn, gãy gọn),
 "summary" (2-3 câu nói vì sao chuyện này quan trọng — vừa một thẻ điện thoại),
-"detail_md" (bài học CHI TIẾT dạng Markdown, khoảng 500-900 từ, gồm các mục:
-   "## Tổng quan" (đây là gì và tình huống thực tế nào cần đến nó),
-   "## Vì sao quan trọng" (được gì / không làm thì sai ở đâu),
-   "## Cách làm & ý chính" (các bước cụ thể hoặc cơ chế cốt lõi; chỉ chèn code trong fenced block
-      NẾU chủ đề mang tính kỹ thuật),
-   "## Sai lầm thường gặp" (lỗi mọi người hay mắc, khi nào KHÔNG nên làm),
-   "## Chốt lại" (hướng dẫn hành động rõ ràng, kèm số liệu/ví dụ cụ thể khi có).
-   Phải cụ thể và thực tế — ví dụ, số liệu, tên thật, chứ không phải lời khuyên chung chung),
+"detail_md" (bài viết ĐẦY ĐỦ dạng Markdown, ĐỘ DÀI BẮT BUỘC 1300-1900 từ — viết như một bài
+   hướng dẫn hoàn chỉnh, KHÔNG được viết sơ sài hay chỉ gạch đầu dòng chung chung. Mỗi mục phải
+   có ít nhất 2-3 đoạn văn hoặc 4-6 bullet CÓ NỘI DUNG THẬT. Dùng ĐÚNG dàn ý sau, đúng thứ tự
+   và đúng tên mục:
+   "## Dàn ý" — danh sách gạch đầu dòng liệt kê các mục bên dưới, mỗi dòng kèm 5-12 từ nói mục
+      đó trả lời câu hỏi gì (đây là dàn ý để người đọc biết bài này đi tới đâu),
+   "## Tổng quan" — đây là gì, đặt trong tình huống thực tế nào, ai cần quan tâm,
+   "## Vì sao quan trọng" — lợi ích cụ thể và hậu quả nếu làm sai (kèm con số khi có),
+   "## Kiến thức cốt lõi" — 3-5 tiểu mục "###", mỗi tiểu mục giải thích một khái niệm/cơ chế và
+      LUÔN kèm một ví dụ cụ thể; chèn code trong fenced block nếu chủ đề kỹ thuật,
+   "## Hướng dẫn từng bước" — danh sách ĐÁNH SỐ các bước làm được ngay, mỗi bước nói rõ làm gì,
+      làm thế nào và dấu hiệu biết là đã đúng,
+   "## Ví dụ thực tế" — một tình huống cụ thể chạy xuyên suốt: bối cảnh, cách xử lý, kết quả kèm
+      số liệu (code/bảng nếu phù hợp),
+   "## Sai lầm thường gặp" — bảng Markdown 3 cột "Sai lầm | Vì sao sai | Sửa thế nào", 4-6 dòng,
+   "## Checklist áp dụng" — danh sách "- [ ] ..." 5-8 việc kiểm được,
+   "## Câu hỏi thường gặp" — 3-5 câu hỏi thật người học hay hỏi, mỗi câu in đậm rồi trả lời 2-4 câu,
+   "## Chốt lại" — 3-5 gạch đầu dòng đúc kết, mỗi dòng một hành động cụ thể.
+   Tuyệt đối cụ thể: ví dụ thật, con số thật, tên công cụ/sản phẩm thật — không nói chung chung),
 "diagram" (một sơ đồ Mermaid nếu nó thực sự giúp hiểu, ví dụ "flowchart LR\\n A-->B" hoặc "mindmap",
    nếu không thì ""; nhãn tiếng Việt phải đặt trong ngoặc kép, ví dụ A["Người dùng"]-->B["Cache"]).`;
 
@@ -73,7 +84,9 @@ export async function generateKnowledge(
     existingTopics.length > 0
       ? `KHÔNG được lặp lại bất kỳ chủ đề đã dạy sau đây:\n- ${existingTopics.join("\n- ")}`
       : "Đây là chủ đề đầu tiên.";
-  const raw = await complete(SYSTEM_PROMPT, avoid + focusClause(focusArea));
+  // A 1300-1900 word Vietnamese lesson plus JSON scaffolding needs a high cap;
+  // the default would truncate the JSON and fail to parse.
+  const raw = await complete(SYSTEM_PROMPT, avoid + focusClause(focusArea), { maxTokens: 8000 });
   return parseKnowledge(raw);
 }
 

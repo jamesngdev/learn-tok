@@ -1,7 +1,30 @@
 import OpenAI from "openai";
 import type { Cefr, Summary } from "./types";
 
-export type CompleteFn = (systemPrompt: string, userPrompt: string) => Promise<string>;
+export interface CompleteOpts {
+  /** Output cap — raise it for long generations (a full lesson needs ~4-6k). */
+  maxTokens?: number;
+}
+
+export type CompleteFn = (
+  systemPrompt: string,
+  userPrompt: string,
+  opts?: CompleteOpts
+) => Promise<string>;
+
+export interface ChatTurn {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+const MODEL = () => process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+
+function client(): OpenAI {
+  return new OpenAI({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    baseURL: "https://api.deepseek.com",
+  });
+}
 
 // Cards are Vietnamese now, so CEFR (an English reading level) no longer means
 // anything. The column stays for schema compatibility with a fixed value.
@@ -15,15 +38,12 @@ Cho một bài báo tiếng Việt, trả về DUY NHẤT một JSON object vớ
 Viết bằng tiếng Việt tự nhiên. Giữ nguyên tiếng Anh các thuật ngữ kỹ thuật, tên riêng,
 tên sản phẩm và từ viết tắt quen dùng (API, CPU, AI...) thay vì dịch máy móc.`;
 
-export const deepseekComplete: CompleteFn = async (system, user) => {
-  const client = new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: "https://api.deepseek.com",
-  });
-  const r = await client.chat.completions.create({
+export const deepseekComplete: CompleteFn = async (system, user, opts) => {
+  const r = await client().chat.completions.create({
     // `deepseek-chat` was retired; the API now serves deepseek-v4-{pro,flash}.
-    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+    model: MODEL(),
     response_format: { type: "json_object" },
+    max_tokens: opts?.maxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -31,6 +51,26 @@ export const deepseekComplete: CompleteFn = async (system, user) => {
   });
   return r.choices[0]?.message?.content ?? "";
 };
+
+/**
+ * Stream a plain-text (non-JSON) chat completion, yielding content deltas.
+ * Used by the "ask about this lesson" chat so answers appear as they are typed.
+ */
+export async function* deepseekChatStream(
+  messages: ChatTurn[],
+  opts: CompleteOpts = {}
+): AsyncGenerator<string> {
+  const stream = await client().chat.completions.create({
+    model: MODEL(),
+    stream: true,
+    max_tokens: opts.maxTokens ?? 1600,
+    messages,
+  });
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) yield delta;
+  }
+}
 
 const TRANSLATE_SYSTEM = `You are a professional English-to-Vietnamese translator for a learning app.
 Translate the user's text into natural, fluent Vietnamese (faithful and idiomatic).

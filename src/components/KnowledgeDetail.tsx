@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import type { KnowledgeDetail as Detail } from "@/lib/types";
 import { TappableText } from "./TappableText";
+import { KnowledgeChat } from "./KnowledgeChat";
 
 let diagramSeq = 0;
 
@@ -168,6 +169,7 @@ export function KnowledgeDetail({
           </>
         )}
       </div>
+      <KnowledgeChat knowledgeId={knowledgeId} open={open && detail != null} />
     </div>
   );
 }
