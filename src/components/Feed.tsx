@@ -100,6 +100,10 @@ function FeedInner({ initial }: { initial: FeedPage }) {
   const topupBusy = useRef(false);
   const modeRef = useRef<FeedMode>(mode);
   modeRef.current = mode;
+  // News the user has scrolled past — reported so it never shows up again.
+  const seenQueue = useRef<Set<number>>(new Set());
+  const seenSent = useRef<Set<number>>(new Set());
+  const seenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -217,10 +221,72 @@ function FeedInner({ initial }: { initial: FeedPage }) {
     return () => io.disconnect();
   }, [loadMore, maybeTopup]);
 
+  // ---- "already scrolled past" tracking for news ----
+  const flushSeen = useCallback((useBeacon = false) => {
+    const ids = [...seenQueue.current];
+    if (ids.length === 0) return;
+    seenQueue.current.clear();
+    ids.forEach((id) => seenSent.current.add(id));
+    const body = JSON.stringify({ type: "news", ids });
+    if (useBeacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
+      navigator.sendBeacon("/api/seen", new Blob([body], { type: "application/json" }));
+      return;
+    }
+    fetch("/api/seen", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => ids.forEach((id) => seenQueue.current.add(id)));
+  }, []);
+
+  const queueSeen = useCallback(
+    (id: number) => {
+      if (seenSent.current.has(id) || seenQueue.current.has(id)) return;
+      seenQueue.current.add(id);
+      if (seenTimer.current) clearTimeout(seenTimer.current);
+      seenTimer.current = setTimeout(() => flushSeen(), 1500);
+    },
+    [flushSeen]
+  );
+
+  // A news card that has been on screen and then scrolls away is "read".
+  useEffect(() => {
+    if (mode !== "news") return;
+    const root = feedRef.current;
+    if (!root) return;
+    const wasVisible = new Set<number>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const id = Number((e.target as HTMLElement).dataset.newsId);
+          if (!Number.isFinite(id)) continue;
+          if (e.isIntersecting) wasVisible.add(id);
+          else if (wasVisible.has(id)) queueSeen(id);
+        }
+      },
+      { root, threshold: 0.55 }
+    );
+    root.querySelectorAll<HTMLElement>("[data-news-id]").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [mode, cards, queueSeen]);
+
+  // Don't lose the queue when the app is backgrounded or closed.
+  useEffect(() => {
+    const onHide = () => flushSeen(true);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+      flushSeen(true);
+    };
+  }, [flushSeen]);
+
   const emptyMsg =
     mode === "knowledge"
       ? "Chưa có thẻ kiến thức. Mở ⚙ để nhập chủ đề, hoặc bấm ↻ để sinh."
-      : "Chưa có tin. Chạy crawler (npm run crawl) hoặc bấm ↻.";
+      : "Hết tin chưa đọc — bấm ↻ để lấy tin mới.";
 
   return (
     <>
@@ -240,7 +306,11 @@ function FeedInner({ initial }: { initial: FeedPage }) {
           </div>
         )}
         {cards.map((c) => (
-          <div key={`${c.type}-${c.id}`} className="card-slot">
+          <div
+            key={`${c.type}-${c.id}`}
+            className="card-slot"
+            {...(c.type === "news" ? { "data-news-id": c.id } : {})}
+          >
             {renderCard(c, { onWord: setWord, onIgnore: ignore, onDetail: setDetailId })}
           </div>
         ))}

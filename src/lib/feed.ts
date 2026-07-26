@@ -35,13 +35,17 @@ function knowledgeToCard(row: any): KnowledgeCard {
   };
 }
 
+// News is one-shot: a story the user scrolled past (or ignored) never comes back.
+const NEWS_UNREAD = `NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
+   AND NOT EXISTS (SELECT 1 FROM seen s WHERE s.card_type='news' AND s.card_id=a.id)`;
+
 function fetchNews(db: DB, cursor: string | null, limit: number): any[] {
   if (cursor) {
     const [pub, id] = cursor.split("|");
     return db
       .prepare(
         `SELECT * FROM articles a
-         WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
+         WHERE ${NEWS_UNREAD}
            AND (a.published_at < ? OR (a.published_at = ? AND a.id < ?))
          ORDER BY a.published_at DESC, a.id DESC LIMIT ?`
       )
@@ -50,7 +54,7 @@ function fetchNews(db: DB, cursor: string | null, limit: number): any[] {
   return db
     .prepare(
       `SELECT * FROM articles a
-       WHERE NOT EXISTS (SELECT 1 FROM ignored i WHERE i.card_type='news' AND i.card_id=a.id)
+       WHERE ${NEWS_UNREAD}
        ORDER BY a.published_at DESC, a.id DESC LIMIT ?`
     )
     .all(limit + 1);

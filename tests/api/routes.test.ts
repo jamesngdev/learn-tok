@@ -11,7 +11,7 @@ vi.mock("@/lib/dictionary", () => ({
 vi.mock("@/lib/translate", () => ({ translateToVi: async () => "nghĩa" }));
 
 beforeEach(() => {
-  testDb.exec("DELETE FROM articles; DELETE FROM words; DELETE FROM my_words;");
+  testDb.exec("DELETE FROM articles; DELETE FROM words; DELETE FROM my_words; DELETE FROM seen;");
 });
 
 describe("GET /api/feed", () => {
@@ -60,5 +60,41 @@ describe("my-words", () => {
     const get = await mw.GET();
     const body = await get.json();
     expect(body.words[0].word).toBe("galaxy");
+  });
+});
+
+describe("POST /api/seen", () => {
+  it("marks news as scrolled past so the feed drops it", async () => {
+    testDb
+      .prepare(
+        `INSERT INTO articles (guid, source_url, title_en, summary_en, summary_vi, category, cefr, published_at, crawled_at)
+         VALUES ('s1','u','T1','S','V','World','B1','2026-07-26T01:00:00Z','2026-07-26T01:00:00Z'),
+                ('s2','u','T2','S','V','World','B1','2026-07-26T02:00:00Z','2026-07-26T02:00:00Z')`
+      )
+      .run();
+    const ids = (
+      testDb.prepare("SELECT id FROM articles ORDER BY id").all() as { id: number }[]
+    ).map((r) => r.id);
+
+    const { POST } = await import("@/app/api/seen/route");
+    const res = await POST(
+      new Request("http://t/api/seen", {
+        method: "POST",
+        body: JSON.stringify({ type: "news", ids: [ids[0]] }),
+      })
+    );
+    expect(await res.json()).toEqual({ ok: true, added: 1 });
+
+    const { GET } = await import("@/app/api/feed/route");
+    const feed = await (await GET(new Request("http://t/api/feed"))).json();
+    expect(feed.cards.map((c: { title_en: string }) => c.title_en)).toEqual(["T2"]);
+  });
+
+  it("400s on an unknown card type", async () => {
+    const { POST } = await import("@/app/api/seen/route");
+    const res = await POST(
+      new Request("http://t/api/seen", { method: "POST", body: JSON.stringify({ type: "x", ids: [1] }) })
+    );
+    expect(res.status).toBe(400);
   });
 });

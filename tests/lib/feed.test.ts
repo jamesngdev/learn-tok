@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { openDb } from "@/lib/db";
 import { getFeed } from "@/lib/feed";
 import { ignoreCard } from "@/lib/ignore";
+import { markSeen } from "@/lib/seen";
 
 function seed(db: ReturnType<typeof openDb>, n: number) {
   const ins = db.prepare(
@@ -51,6 +52,14 @@ describe("getFeed news mode", () => {
     const page = getFeed(db, "news", null, 10);
     expect(page.cards.map((c) => c.title_en)).not.toContain("T3");
   });
+
+  it("excludes news already scrolled past", () => {
+    const db = openDb(":memory:");
+    seed(db, 3);
+    markSeen(db, "news", [3, 1], "t");
+    const page = getFeed(db, "news", null, 10);
+    expect(page.cards.map((c) => c.title_en)).toEqual(["T2"]);
+  });
 });
 
 describe("getFeed knowledge mode", () => {
@@ -79,5 +88,13 @@ describe("getFeed knowledge mode", () => {
     ignoreCard(db, "knowledge", 1, "t");
     const page = getFeed(db, "knowledge", null, 10);
     expect(page.cards.map((c) => c.title_en)).toEqual(["K2"]);
+  });
+
+  it("keeps knowledge that was scrolled past (lessons are re-readable)", () => {
+    const db = openDb(":memory:");
+    seedKnowledge(db, 2);
+    markSeen(db, "knowledge", [1], "t");
+    const page = getFeed(db, "knowledge", null, 10);
+    expect(page.cards.map((c) => c.title_en)).toEqual(["K1", "K2"]);
   });
 });

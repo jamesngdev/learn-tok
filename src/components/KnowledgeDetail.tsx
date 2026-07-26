@@ -1,9 +1,13 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import type { KnowledgeDetail as Detail } from "@/lib/types";
+import { markdownToSpeech, splitSentences } from "@/lib/speech-text";
+import { useTtsPlayer } from "@/lib/use-tts-player";
 import { TappableText } from "./TappableText";
 import { KnowledgeChat } from "./KnowledgeChat";
+
+const NO_SENTENCES: string[] = [];
 
 let diagramSeq = 0;
 
@@ -55,6 +59,20 @@ export function KnowledgeDetail({
   const [loading, setLoading] = useState(false);
   const suppressMouse = useRef(false);
   const lastTap = useRef({ t: 0, x: 0, y: 0 });
+
+  // Read the lesson aloud without going into driving mode. The sentence split
+  // matches the pre-generation worker's, so warmed clips are served instantly.
+  const sentences = useMemo(
+    () =>
+      detail
+        ? splitSentences(
+            `${detail.title_en}. ${detail.summary_en}. ${markdownToSpeech(detail.detail_md)}`
+          )
+        : NO_SENTENCES,
+    [detail]
+  );
+  const player = useTtsPlayer(sentences);
+  const stopPlayer = player.stop;
 
   useEffect(() => {
     if (knowledgeId == null) return;
@@ -108,14 +126,52 @@ export function KnowledgeDetail({
   }
 
   const open = knowledgeId != null;
+
+  // Closing the panel must not leave audio playing behind it.
+  useEffect(() => {
+    if (!open) stopPlayer();
+  }, [open, stopPlayer]);
+
+  const playerOn = player.playing || player.loading || player.index > 0;
   return (
     <div className={`detail${open ? " open" : ""}`} role="dialog" aria-label="Knowledge detail">
       <div className="detail-bar">
         <button type="button" className="detail-close" onClick={onClose} aria-label="Close">
           ← Đóng
         </button>
+        {detail && (
+          <button
+            type="button"
+            className={`detail-play${player.playing ? " on" : ""}`}
+            onClick={player.toggle}
+            aria-label={player.playing ? "Tạm dừng" : "Nghe bài viết"}
+          >
+            {player.playing ? "⏸ Dừng" : "🔊 Nghe"}
+          </button>
+        )}
         {detail && <span className="detail-cat">🧠 {detail.category}</span>}
       </div>
+      {detail && playerOn && (
+        <div className="play-bar">
+          <button type="button" onClick={() => player.skip(-1)} aria-label="Câu trước">
+            ⏮
+          </button>
+          <div className="play-mid">
+            <div className="play-progress">
+              <span style={{ width: `${((player.index + 1) / Math.max(player.total, 1)) * 100}%` }} />
+            </div>
+            <div className="play-cur">
+              {player.loading ? "🎙️ Đang tạo giọng…" : player.sentence}
+            </div>
+          </div>
+          <button type="button" onClick={() => player.skip(1)} aria-label="Câu sau">
+            ⏭
+          </button>
+          <span className="play-count">
+            {player.index + 1}/{player.total}
+          </span>
+        </div>
+      )}
       <div className="detail-body">
         {loading && <p className="loading">Đang tải…</p>}
         {detail && (

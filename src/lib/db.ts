@@ -54,6 +54,15 @@ CREATE TABLE IF NOT EXISTS ignored (
   PRIMARY KEY (card_type, card_id)
 );
 
+-- Cards the user has already scrolled past. News is one-shot: once seen it
+-- never comes back in the feed (knowledge cards are kept, they are re-readable).
+CREATE TABLE IF NOT EXISTS seen (
+  card_type TEXT NOT NULL,
+  card_id INTEGER NOT NULL,
+  seen_at TEXT NOT NULL,
+  PRIMARY KEY (card_type, card_id)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

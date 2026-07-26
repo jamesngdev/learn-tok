@@ -33,8 +33,11 @@ services:
     environment:
       - HF_HOME=/data/hf-cache
       - OMNIVOICE_NUM_STEP=16
-      # Read the cards in Vietnamese with a male young-adult voice.
+      # Read the cards in Vietnamese, cloning this reference voice. Set
+      # OMNIVOICE_REF_TEXT if Whisper's auto-transcript of the clip is wrong.
       - OMNIVOICE_LANG=vi
+      - OMNIVOICE_REF_AUDIO_URL=https://raw.githubusercontent.com/jamesngdev/public/refs/heads/main/spiderum-voices/spiderum_voice.wav
+      # Fallback voice if the reference clip can't be fetched.
       - OMNIVOICE_INSTRUCT=male, young adult
     volumes:
       - dailytok-data:/data

@@ -1,5 +1,8 @@
+import hashlib
 import io
+import logging
 import os
+import urllib.request
 import wave
 
 import numpy as np
@@ -7,19 +10,32 @@ import torch
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from omnivoice import OmniVoice
-from omnivoice.models.omnivoice import OmniVoiceGenerationConfig
+from omnivoice.models.omnivoice import OmniVoiceGenerationConfig, VoiceClonePrompt
+
+log = logging.getLogger("omnivoice-svc")
 
 SR = 24000
-# Only OmniVoice's fixed instruct vocabulary is allowed (comma + space).
-# The cards are Vietnamese, so no English accent tag here — an accent tag makes
-# the model read Vietnamese with that accent.
+# Fallback voice-design instruct, used only when no reference voice is available.
+# Only OmniVoice's fixed instruct vocabulary is allowed (comma + space), and the
+# cards are Vietnamese so there is no English accent tag here.
 VOICE_INSTRUCT = os.environ.get("OMNIVOICE_INSTRUCT", "male, young adult")
 # ISO code / language name resolved by OmniVoice (646 languages); "vi" = Vietnamese.
 LANGUAGE = os.environ.get("OMNIVOICE_LANG", "vi")
 NUM_STEP = int(os.environ.get("OMNIVOICE_NUM_STEP", "16"))
 
+# Voice cloning: everything is read in the voice of this reference clip.
+REF_AUDIO_URL = os.environ.get(
+    "OMNIVOICE_REF_AUDIO_URL",
+    "https://raw.githubusercontent.com/jamesngdev/public/refs/heads/main/spiderum-voices/spiderum_voice.wav",
+).strip()
+# Transcript of the reference clip. Left empty, Whisper transcribes it once.
+REF_TEXT = (os.environ.get("OMNIVOICE_REF_TEXT") or "").strip() or None
+REF_DIR = os.environ.get("OMNIVOICE_REF_DIR", "/data/ref-voice")
+
 app = FastAPI()
 _model = None
+_clone_prompt = None
+_clone_error = None
 
 
 def get_model():
@@ -29,10 +45,47 @@ def get_model():
     return _model
 
 
+def get_clone_prompt():
+    """
+    The reference-voice prompt, built once and cached on disk. Encoding the
+    reference clip (and transcribing it with Whisper when no transcript is
+    given) is slow, and the result is reusable for every request — so it is
+    saved next to the downloaded clip in the data volume.
+
+    Returns None if no reference voice is configured or it could not be built;
+    the service then falls back to voice-design mode instead of failing.
+    """
+    global _clone_prompt, _clone_error
+    if _clone_prompt is not None or not REF_AUDIO_URL:
+        return _clone_prompt
+    key = hashlib.sha256(f"{REF_AUDIO_URL}|{REF_TEXT or ''}".encode()).hexdigest()[:16]
+    prompt_path = os.path.join(REF_DIR, f"{key}.prompt.pt")
+    wav_path = os.path.join(REF_DIR, f"{key}.wav")
+    try:
+        os.makedirs(REF_DIR, exist_ok=True)
+        if os.path.exists(prompt_path):
+            _clone_prompt = VoiceClonePrompt.load(prompt_path)
+            log.info("Loaded cached voice clone prompt: %s", prompt_path)
+        else:
+            if not os.path.exists(wav_path):
+                log.info("Downloading reference voice %s", REF_AUDIO_URL)
+                urllib.request.urlretrieve(REF_AUDIO_URL, wav_path)
+            _clone_prompt = get_model().create_voice_clone_prompt(wav_path, ref_text=REF_TEXT)
+            _clone_prompt.save(prompt_path)
+            log.info("Built voice clone prompt, ref_text=%r", _clone_prompt.ref_text)
+        _clone_error = None
+    except Exception as exc:  # noqa: BLE001 - never take the service down for this
+        _clone_error = repr(exc)
+        log.exception("Voice clone prompt unavailable, falling back to voice design")
+    return _clone_prompt
+
+
 @app.on_event("startup")
 def _warmup():
-    # Load the model once at boot (~30s) so requests don't pay for it.
+    # Load the model once at boot (~30s) so requests don't pay for it, then
+    # build the reference-voice prompt (first run also pulls a Whisper model).
     get_model()
+    get_clone_prompt()
 
 
 class Req(BaseModel):
@@ -55,19 +108,37 @@ def to_wav_bytes(audio: np.ndarray) -> bytes:
 
 @app.get("/health")
 def health():
-    return {"ok": _model is not None}
+    prompt = _clone_prompt
+    return {
+        "ok": _model is not None,
+        "voice": "clone" if prompt is not None else "design",
+        "ref_audio_url": REF_AUDIO_URL or None,
+        "ref_text": prompt.ref_text if prompt is not None else None,
+        "clone_error": _clone_error,
+    }
 
 
 @app.post("/tts")
 def tts(req: Req):
     model = get_model()
     cfg = OmniVoiceGenerationConfig(num_step=NUM_STEP)
-    out = model.generate(
-        text=req.text,
-        language=req.language or LANGUAGE,
-        instruct=req.instruct or VOICE_INSTRUCT,
-        generation_config=cfg,
-    )
+    # An explicit instruct forces voice-design mode; otherwise clone the
+    # reference voice when we have it.
+    prompt = None if req.instruct else get_clone_prompt()
+    if prompt is not None:
+        out = model.generate(
+            text=req.text,
+            language=req.language or LANGUAGE,
+            voice_clone_prompt=prompt,
+            generation_config=cfg,
+        )
+    else:
+        out = model.generate(
+            text=req.text,
+            language=req.language or LANGUAGE,
+            instruct=req.instruct or VOICE_INSTRUCT,
+            generation_config=cfg,
+        )
     if isinstance(out, list):
         parts = [np.asarray(x, dtype=np.float32).reshape(-1) for x in out]
         audio = np.concatenate(parts) if parts else np.zeros(1, dtype=np.float32)
