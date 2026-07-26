@@ -32,6 +32,9 @@ REF_AUDIO_URL = os.environ.get(
 # Transcript of the reference clip. Left empty, Whisper transcribes it once.
 REF_TEXT = (os.environ.get("OMNIVOICE_REF_TEXT") or "").strip() or None
 REF_DIR = os.environ.get("OMNIVOICE_REF_DIR", "/data/ref-voice")
+# The reference clip is prepended to EVERY generation, so its length is paid for
+# on every sentence. OmniVoice recommends 3-10s; we trim at a silence gap.
+REF_MAX_SEC = float(os.environ.get("OMNIVOICE_REF_MAX_SEC", "6"))
 # OmniVoice defaults to whisper-large-v3-turbo (~3GB in fp32) — too heavy for
 # this box, and it only ever transcribes one 11s clip.
 ASR_MODEL = os.environ.get("OMNIVOICE_ASR_MODEL", "openai/whisper-small")
@@ -77,7 +80,15 @@ def get_clone_prompt():
             model = get_model()
             if REF_TEXT is None:
                 model.load_asr_model(ASR_MODEL)
-            _clone_prompt = model.create_voice_clone_prompt(wav_path, ref_text=REF_TEXT)
+            ref_audio: object = wav_path
+            if REF_MAX_SEC > 0:
+                from omnivoice.utils.audio import load_audio, trim_long_audio
+
+                wav = load_audio(wav_path, model.sampling_rate)
+                wav = trim_long_audio(wav, model.sampling_rate, trim_threshold=REF_MAX_SEC)
+                log.info("Reference clip trimmed to %.1fs", wav.shape[-1] / model.sampling_rate)
+                ref_audio = (torch.from_numpy(wav), model.sampling_rate)
+            _clone_prompt = model.create_voice_clone_prompt(ref_audio, ref_text=REF_TEXT)
             _clone_prompt.save(prompt_path)
             log.info("Built voice clone prompt, ref_text=%r", _clone_prompt.ref_text)
             # The transcript is baked into the cached prompt now — drop the ASR
