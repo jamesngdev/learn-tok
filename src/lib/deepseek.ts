@@ -4,6 +4,12 @@ import type { Cefr, Summary } from "./types";
 export interface CompleteOpts {
   /** Output cap — raise it for long generations (a full lesson needs ~4-6k). */
   maxTokens?: number;
+  /**
+   * Ask for a JSON object (default). Long Markdown answers should use `false`:
+   * in JSON mode the model regularly forgets to escape quotes inside a
+   * multi-thousand-word string, and the whole response is then unparseable.
+   */
+  json?: boolean;
 }
 
 export type CompleteFn = (
@@ -42,7 +48,7 @@ export const deepseekComplete: CompleteFn = async (system, user, opts) => {
   const r = await client().chat.completions.create({
     // `deepseek-chat` was retired; the API now serves deepseek-v4-{pro,flash}.
     model: MODEL(),
-    response_format: { type: "json_object" },
+    response_format: opts?.json === false ? undefined : { type: "json_object" },
     max_tokens: opts?.maxTokens,
     messages: [
       { role: "system", content: system },
