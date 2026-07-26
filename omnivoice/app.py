@@ -1,3 +1,4 @@
+import gc
 import hashlib
 import io
 import logging
@@ -31,6 +32,9 @@ REF_AUDIO_URL = os.environ.get(
 # Transcript of the reference clip. Left empty, Whisper transcribes it once.
 REF_TEXT = (os.environ.get("OMNIVOICE_REF_TEXT") or "").strip() or None
 REF_DIR = os.environ.get("OMNIVOICE_REF_DIR", "/data/ref-voice")
+# OmniVoice defaults to whisper-large-v3-turbo (~3GB in fp32) — too heavy for
+# this box, and it only ever transcribes one 11s clip.
+ASR_MODEL = os.environ.get("OMNIVOICE_ASR_MODEL", "openai/whisper-small")
 
 app = FastAPI()
 _model = None
@@ -70,9 +74,16 @@ def get_clone_prompt():
             if not os.path.exists(wav_path):
                 log.info("Downloading reference voice %s", REF_AUDIO_URL)
                 urllib.request.urlretrieve(REF_AUDIO_URL, wav_path)
-            _clone_prompt = get_model().create_voice_clone_prompt(wav_path, ref_text=REF_TEXT)
+            model = get_model()
+            if REF_TEXT is None:
+                model.load_asr_model(ASR_MODEL)
+            _clone_prompt = model.create_voice_clone_prompt(wav_path, ref_text=REF_TEXT)
             _clone_prompt.save(prompt_path)
             log.info("Built voice clone prompt, ref_text=%r", _clone_prompt.ref_text)
+            # The transcript is baked into the cached prompt now — drop the ASR
+            # model so it stops holding memory for the rest of the process.
+            model._asr_pipe = None
+            gc.collect()
         _clone_error = None
     except Exception as exc:  # noqa: BLE001 - never take the service down for this
         _clone_error = repr(exc)
