@@ -51,6 +51,9 @@ function AppBar({
         <a className="chip mini" href="/my-words" title="My Words">
           <span className="n">{savedTodayCount}</span>
         </a>
+        <a className="iconbtn" href="/chi-tieu" aria-label="Chi tiêu" title="Quản lý chi tiêu">
+          💸
+        </a>
         <button
           type="button"
           className="iconbtn"

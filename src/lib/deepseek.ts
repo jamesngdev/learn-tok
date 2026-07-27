@@ -78,6 +78,69 @@ export async function* deepseekChatStream(
   }
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  /** Raw JSON string as produced by the model — parse defensively. */
+  arguments: string;
+}
+
+export type ToolStreamEvent =
+  | { type: "text"; delta: string }
+  | { type: "tool_calls"; calls: ToolCall[] };
+
+/** Injectable shape of `deepseekToolStream`, so agent loops can be tested offline. */
+export type ToolStreamFn = (
+  messages: unknown[],
+  tools?: unknown[],
+  opts?: CompleteOpts
+) => AsyncGenerator<ToolStreamEvent>;
+
+/**
+ * Stream a tool-enabled chat completion. Text deltas are yielded as they
+ * arrive; tool calls are yielded once, at the end of the turn.
+ *
+ * A streamed tool call arrives spread over many chunks — the name in the first
+ * one, `arguments` a few characters at a time after that — keyed by `index`,
+ * so they have to be reassembled before they can be run. Pass `tools`
+ * undefined to force a plain text answer (DeepSeek does not honour
+ * `tool_choice`, so dropping the tools is how you stop a tool loop).
+ */
+export async function* deepseekToolStream(
+  messages: unknown[],
+  tools?: unknown[],
+  opts: CompleteOpts = {}
+): AsyncGenerator<ToolStreamEvent> {
+  const stream = await client().chat.completions.create({
+    model: MODEL(),
+    stream: true,
+    max_tokens: opts.maxTokens ?? 1600,
+    messages: messages as any,
+    ...(tools && tools.length ? { tools: tools as any } : {}),
+  });
+
+  const partial = new Map<number, { id: string; name: string; args: string }>();
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta as
+      | { content?: string | null; tool_calls?: any[] }
+      | undefined;
+    if (delta?.content) yield { type: "text", delta: delta.content };
+    for (const tc of delta?.tool_calls ?? []) {
+      const slot = partial.get(tc.index) ?? { id: "", name: "", args: "" };
+      if (tc.id) slot.id = tc.id;
+      if (tc.function?.name) slot.name += tc.function.name;
+      if (tc.function?.arguments) slot.args += tc.function.arguments;
+      partial.set(tc.index, slot);
+    }
+  }
+
+  const calls = [...partial.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([i, s]) => ({ id: s.id || `call_${i}`, name: s.name, arguments: s.args }))
+    .filter((c) => c.name);
+  if (calls.length) yield { type: "tool_calls", calls };
+}
+
 const TRANSLATE_SYSTEM = `You are a professional English-to-Vietnamese translator for a learning app.
 Translate the user's text into natural, fluent Vietnamese (faithful and idiomatic).
 Keep widely-used technical terms, product names, acronyms, and jargon in English

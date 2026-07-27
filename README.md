@@ -16,6 +16,19 @@ server-generated TTS audio.
 > summary columns now hold the same Vietnamese text, and `cefr` is a fixed
 > placeholder.
 
+## Chi tiêu — `/chi-tieu`
+A second screen, unrelated to the feed: an expense ledger you write to by typing
+in Vietnamese. "trưa cơm 45k, gửi xe 5k" → DeepSeek splits it into items and
+writes them straight to SQLite via function calling; the same box answers
+questions ("tháng này ăn uống bao nhiêu?").
+
+Every number comes from a `SUM()` in SQL and every date range is resolved
+server-side in `Asia/Ho_Chi_Minh` — the model picks a named period and reads the
+result, it never does arithmetic. Tap any row to fix or delete it, and `＋ thêm
+tay` records spending even when DeepSeek is unreachable.
+
+Design notes: `docs/superpowers/specs/2026-07-27-expense-chat-design.md`.
+
 ## Setup
 1. `cp .env.example .env` and set `DEEPSEEK_API_KEY` + `DATABASE_PATH`.
 2. `npm install`
