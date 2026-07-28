@@ -105,17 +105,6 @@ export function KnowledgeDetail({
     };
   }, [knowledgeId]);
 
-  // Translate the current multi-word selection, if any. Returns true if handled.
-  function openSelectionPhrase(): boolean {
-    const sel = window.getSelection();
-    const s = sel && !sel.isCollapsed ? sel.toString().trim() : "";
-    if (s && /\s/.test(s)) {
-      onWord(s.length > 200 ? s.slice(0, 200) : s);
-      return true;
-    }
-    return false;
-  }
-
   // Open the single word (from a word-selection or the point under the cursor).
   function openWordAt(x: number | null, y: number | null) {
     const sel = window.getSelection();
@@ -135,95 +124,86 @@ export function KnowledgeDetail({
   const playerOn = player.playing || player.loading || player.index > 0;
   return (
     <div className={`detail${open ? " open" : ""}`} role="dialog" aria-label="Knowledge detail">
-      <div className="detail-bar">
-        <button type="button" className="detail-close" onClick={onClose} aria-label="Close">
-          ← Đóng
-        </button>
-        {detail && (
-          <button
-            type="button"
-            className={`detail-play${player.playing ? " on" : ""}`}
-            onClick={player.toggle}
-            aria-label={player.playing ? "Tạm dừng" : "Nghe bài viết"}
-          >
-            {player.playing ? "⏸ Dừng" : "🔊 Nghe"}
+      {/* The article column. On desktop the chat sits beside it, not under it. */}
+      <div className="detail-main">
+        <div className="detail-bar">
+          <button type="button" className="detail-close" onClick={onClose} aria-label="Close">
+            ← Đóng
           </button>
-        )}
-        {detail && <span className="detail-cat">🧠 {detail.category}</span>}
-      </div>
-      {detail && playerOn && (
-        <div className="play-bar">
-          <button type="button" onClick={() => player.skip(-1)} aria-label="Câu trước">
-            ⏮
-          </button>
-          <div className="play-mid">
-            <div className="play-progress">
-              <span style={{ width: `${((player.index + 1) / Math.max(player.total, 1)) * 100}%` }} />
-            </div>
-            <div className="play-cur">
-              {player.loading ? "🎙️ Đang tạo giọng…" : player.sentence}
-            </div>
-          </div>
-          <button type="button" onClick={() => player.skip(1)} aria-label="Câu sau">
-            ⏭
-          </button>
-          <span className="play-count">
-            {player.index + 1}/{player.total}
-          </span>
+          {detail && (
+            <button
+              type="button"
+              className={`detail-play${player.playing ? " on" : ""}`}
+              onClick={player.toggle}
+              aria-label={player.playing ? "Tạm dừng" : "Nghe bài viết"}
+            >
+              {player.playing ? "⏸ Dừng" : "🔊 Nghe"}
+            </button>
+          )}
+          {detail && <span className="detail-cat">🧠 {detail.category}</span>}
         </div>
-      )}
-      <div className="detail-body">
-        {loading && <p className="loading">Đang tải…</p>}
-        {detail && (
-          <>
-            <h1 className="detail-title">
-              <TappableText text={detail.title_en} onWord={onWord} />
-            </h1>
-            <p className="detail-lede">{detail.summary_en}</p>
-            {diagramSvg && (
-              <div className="diagram" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
-            )}
-            <p className="tap-hint">
-              Nhấp đúp (double-tap) 1 thuật ngữ tiếng Anh để tra · bôi đen 1 cụm để dịch cả cụm
-            </p>
-            <div
-              className="markdown"
-              onTouchEnd={(e) => {
-                // Suppress the synthetic mouse/dblclick events that follow a touch.
-                suppressMouse.current = true;
-                setTimeout(() => (suppressMouse.current = false), 700);
-                // A finished selection -> translate the phrase.
-                if (openSelectionPhrase()) {
-                  lastTap.current = { t: 0, x: 0, y: 0 };
-                  return;
-                }
-                const t = e.changedTouches[0];
-                if (!t) return;
-                // Detect a double-tap on the same spot -> open that word.
-                const now = e.timeStamp;
-                const prev = lastTap.current;
-                const near = Math.abs(t.clientX - prev.x) < 30 && Math.abs(t.clientY - prev.y) < 30;
-                if (now - prev.t < 320 && near) {
-                  lastTap.current = { t: 0, x: 0, y: 0 };
-                  openWordAt(t.clientX, t.clientY);
-                } else {
-                  lastTap.current = { t: now, x: t.clientX, y: t.clientY };
-                }
-              }}
-              onMouseUp={() => {
-                // Desktop: a deliberate multi-word drag-select -> phrase.
-                if (suppressMouse.current) return;
-                openSelectionPhrase();
-              }}
-              onDoubleClick={(e) => {
-                // Desktop: double-click a word -> translate that word.
-                if (suppressMouse.current) return;
-                openWordAt(e.clientX, e.clientY);
-              }}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          </>
+        {detail && playerOn && (
+          <div className="play-bar">
+            <button type="button" onClick={() => player.skip(-1)} aria-label="Câu trước">
+              ⏮
+            </button>
+            <div className="play-mid">
+              <div className="play-progress">
+                <span style={{ width: `${((player.index + 1) / Math.max(player.total, 1)) * 100}%` }} />
+              </div>
+              <div className="play-cur">
+                {player.loading ? "🎙️ Đang tạo giọng…" : player.sentence}
+              </div>
+            </div>
+            <button type="button" onClick={() => player.skip(1)} aria-label="Câu sau">
+              ⏭
+            </button>
+            <span className="play-count">
+              {player.index + 1}/{player.total}
+            </span>
+          </div>
         )}
+        <div className="detail-body">
+          {loading && <p className="loading">Đang tải…</p>}
+          {detail && (
+            <>
+              <h1 className="detail-title">
+                <TappableText text={detail.title_en} onWord={onWord} />
+              </h1>
+              <p className="detail-lede">{detail.summary_en}</p>
+              {diagramSvg && (
+                <div className="diagram" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
+              )}
+              <p className="tap-hint">Nhấp đúp (double-tap) 1 thuật ngữ tiếng Anh để tra nghĩa</p>
+              <div
+                className="markdown"
+                onTouchEnd={(e) => {
+                  // Suppress the synthetic mouse/dblclick events that follow a touch.
+                  suppressMouse.current = true;
+                  setTimeout(() => (suppressMouse.current = false), 700);
+                  const t = e.changedTouches[0];
+                  if (!t) return;
+                  // Detect a double-tap on the same spot -> open that word.
+                  const now = e.timeStamp;
+                  const prev = lastTap.current;
+                  const near = Math.abs(t.clientX - prev.x) < 30 && Math.abs(t.clientY - prev.y) < 30;
+                  if (now - prev.t < 320 && near) {
+                    lastTap.current = { t: 0, x: 0, y: 0 };
+                    openWordAt(t.clientX, t.clientY);
+                  } else {
+                    lastTap.current = { t: now, x: t.clientX, y: t.clientY };
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  // Desktop: double-click a word -> translate that word.
+                  if (suppressMouse.current) return;
+                  openWordAt(e.clientX, e.clientY);
+                }}
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            </>
+          )}
+        </div>
       </div>
       <KnowledgeChat knowledgeId={knowledgeId} open={open && detail != null} />
     </div>
